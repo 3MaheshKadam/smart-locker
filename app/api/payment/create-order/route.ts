@@ -5,9 +5,9 @@ import Payment from '@/models/Payment';
 import Session from '@/models/Session';
 import { razorpay } from '@/lib/razorpay';
 import { verifyToken } from '@/lib/auth';
-import { calculateOvertimeHours, isInGracePeriod } from '@/lib/utils';
+import { calculateOvertimeMinutes, isInGracePeriod } from '@/lib/utils';
 
-const CONVENIENCE_FEE_PAISE = 200; // ₹2
+const CONVENIENCE_FEE_PAISE = 200;
 
 export async function POST(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '');
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const payload = verifyToken(token);
   if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-  const { locker_id, duration_hours, type, session_id } = await req.json();
+  const { locker_id, duration_minutes, type, session_id } = await req.json();
 
   if (!locker_id || !type) {
     return NextResponse.json({ error: 'locker_id and type are required' }, { status: 400 });
@@ -28,13 +28,14 @@ export async function POST(req: NextRequest) {
   if (!locker) return NextResponse.json({ error: 'Locker not found' }, { status: 404 });
 
   let amount = 0;
-  let hours = duration_hours;
+  let minutes = duration_minutes;
 
   if (type === 'initial') {
-    if (!duration_hours || duration_hours < 1 || duration_hours > 12) {
-      return NextResponse.json({ error: 'duration_hours must be between 1 and 12' }, { status: 400 });
+    if (!duration_minutes || duration_minutes < 1 || duration_minutes > 720) {
+      return NextResponse.json({ error: 'duration_minutes must be between 1 and 720' }, { status: 400 });
     }
-    amount = locker.hourly_rate * duration_hours + CONVENIENCE_FEE_PAISE;
+    const base = Math.max(100, Math.round((locker.hourly_rate / 60) * duration_minutes));
+    amount = base + CONVENIENCE_FEE_PAISE;
   } else if (type === 'overtime') {
     if (!session_id) return NextResponse.json({ error: 'session_id required for overtime' }, { status: 400 });
     const session = await Session.findById(session_id);
@@ -45,18 +46,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Still within grace period. No overtime due yet.' }, { status: 400 });
     }
 
-    hours = calculateOvertimeHours(session.paid_until);
-    if (hours <= 0) return NextResponse.json({ error: 'No overtime due' }, { status: 400 });
-    amount = locker.hourly_rate * hours + CONVENIENCE_FEE_PAISE;
+    minutes = calculateOvertimeMinutes(session.paid_until);
+    if (minutes <= 0) return NextResponse.json({ error: 'No overtime due' }, { status: 400 });
+
+    // Overtime billed in full-hour ceiling
+    const overtimeHours = Math.ceil(minutes / 60);
+    amount = locker.hourly_rate * overtimeHours + CONVENIENCE_FEE_PAISE;
+    minutes = overtimeHours * 60; // round up to full hours for billing
   } else {
     return NextResponse.json({ error: 'type must be initial or overtime' }, { status: 400 });
   }
 
-  const order = await razorpay.orders.create({
-    amount,
-    currency: 'INR',
-    receipt: `locker_${locker_id}_${Date.now()}`,
-  });
+  let order;
+  try {
+    order = await razorpay.orders.create({
+      amount,
+      currency: 'INR',
+      receipt: `locker_${locker_id}_${Date.now()}`,
+    });
+  } catch (err: unknown) {
+    const rzpErr = err as { error?: { description?: string } };
+    const msg = rzpErr?.error?.description || 'Razorpay order creation failed';
+    console.error('[Razorpay]', rzpErr);
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
 
   await Payment.create({
     locker_id: locker._id,
@@ -64,14 +77,9 @@ export async function POST(req: NextRequest) {
     razorpay_order_id: order.id,
     amount,
     type,
-    duration_hours: hours,
+    duration_hours: minutes / 60,
     status: 'pending',
   });
 
-  return NextResponse.json({
-    order_id: order.id,
-    amount,
-    currency: 'INR',
-    duration_hours: hours,
-  });
+  return NextResponse.json({ order_id: order.id, amount, currency: 'INR', duration_minutes: minutes });
 }

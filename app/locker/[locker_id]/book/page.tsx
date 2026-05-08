@@ -17,10 +17,10 @@ export default function BookPage() {
   const params = useParams<{ locker_id: string }>();
 
   const [locker, setLocker] = useState<LockerInfo | null>(null);
-  const [duration, setDuration] = useState(1);
+  const [durationMinutes, setDurationMinutes] = useState(1); // default 1 min for quick testing
   const [orderId, setOrderId] = useState('');
   const [error, setError] = useState('');
-  const [creatingOrder, setCreatingOrder] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [token, setToken] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -33,33 +33,49 @@ export default function BookPage() {
     setToken(t);
     setName(n);
     setEmail(e);
-
-    fetch(`/api/locker/${params.locker_id}`)
-      .then((r) => r.json())
-      .then(setLocker);
+    fetch(`/api/locker/${params.locker_id}`).then((r) => r.json()).then(setLocker);
   }, [params.locker_id, router]);
 
   async function createOrder() {
     setError('');
-    setCreatingOrder(true);
+    setLoading(true);
     const res = await fetch('/api/payment/create-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ locker_id: params.locker_id, duration_hours: duration, type: 'initial' }),
+      body: JSON.stringify({ locker_id: params.locker_id, duration_minutes: durationMinutes, type: 'initial' }),
     });
     const data = await res.json();
-    setCreatingOrder(false);
+    setLoading(false);
     if (!res.ok) { setError(data.error); return; }
     setOrderId(data.order_id);
   }
 
-  async function handlePaymentSuccess(paymentData: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) {
+  async function handlePaymentSuccess(paymentData: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) {
     const res = await fetch('/api/payment/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ ...paymentData, name }),
     });
     const data = await res.json();
+    if (!res.ok) { setError(data.error); return; }
+    localStorage.setItem('sl_token', data.token);
+    router.push(`/locker/${params.locker_id}/success?session_id=${data.session_id}`);
+  }
+
+  async function handleMockPayment() {
+    setError('');
+    setLoading(true);
+    const res = await fetch('/api/payment/mock-success', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ locker_id: params.locker_id, duration_minutes: durationMinutes, name }),
+    });
+    const data = await res.json();
+    setLoading(false);
     if (!res.ok) { setError(data.error); return; }
     localStorage.setItem('sl_token', data.token);
     router.push(`/locker/${params.locker_id}/success?session_id=${data.session_id}`);
@@ -73,7 +89,7 @@ export default function BookPage() {
     );
   }
 
-  const totalAmount = locker.hourly_rate * duration + 200;
+  const totalAmount = Math.max(100, Math.round((locker.hourly_rate / 60) * durationMinutes)) + 200;
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-indigo-50 to-white flex items-center justify-center p-4">
@@ -89,8 +105,12 @@ export default function BookPage() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
-          <DurationPicker value={duration} onChange={(h) => { setDuration(h); setOrderId(''); }} hourlyRate={locker.hourly_rate} />
-          <PriceSummary hourlyRate={locker.hourly_rate} hours={duration} />
+          <DurationPicker
+            value={durationMinutes}
+            onChange={(m) => { setDurationMinutes(m); setOrderId(''); }}
+            hourlyRate={locker.hourly_rate}
+          />
+          <PriceSummary hourlyRate={locker.hourly_rate} durationMinutes={durationMinutes} />
         </div>
 
         {error && <p className="text-red-500 text-sm text-center">{error}</p>}
@@ -98,10 +118,10 @@ export default function BookPage() {
         {!orderId ? (
           <button
             onClick={createOrder}
-            disabled={creatingOrder}
+            disabled={loading}
             className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all disabled:opacity-60"
           >
-            {creatingOrder ? 'Preparing payment...' : 'Proceed to Pay'}
+            {loading ? 'Preparing payment...' : 'Proceed to Pay'}
           </button>
         ) : (
           <RazorpayButton
@@ -109,10 +129,22 @@ export default function BookPage() {
             amount={totalAmount}
             email={email}
             name={name}
-            label={`Pay ₹${(totalAmount / 100).toFixed(0)}`}
+            label={`Pay ₹${(totalAmount / 100).toFixed(2)}`}
             onSuccess={handlePaymentSuccess}
             onFailure={() => setError('Payment failed. Please try again.')}
           />
+        )}
+
+        {process.env.NODE_ENV !== 'production' && (
+          <button
+            onClick={handleMockPayment}
+            disabled={loading}
+            className="w-full py-3 border-2 border-dashed border-amber-400 text-amber-600 font-semibold rounded-xl text-sm hover:bg-amber-50 transition-all disabled:opacity-50"
+          >
+            {loading
+              ? 'Processing...'
+              : `Skip Payment (Dev) — ${durationMinutes < 60 ? `${durationMinutes} min` : `${durationMinutes / 60} hr`} for ₹${(totalAmount / 100).toFixed(2)}`}
+          </button>
         )}
       </div>
     </main>

@@ -4,8 +4,8 @@ import Payment from '@/models/Payment';
 import Session from '@/models/Session';
 import Locker from '@/models/Locker';
 import { verifyRazorpaySignature } from '@/lib/razorpay';
-import { verifyToken } from '@/lib/auth';
-import { signToken } from '@/lib/auth';
+import { verifyToken, signToken } from '@/lib/auth';
+import { publishUnlock } from '@/lib/mqtt';
 
 export async function POST(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '');
@@ -58,6 +58,9 @@ export async function POST(req: NextRequest) {
       { status: 'occupied', current_session_id: session._id, unlock_requested: true }
     );
 
+    // Fire MQTT instantly (non-blocking) — ESP receives unlock command in <1s
+    publishUnlock(locker.locker_id).catch(console.error);
+
     const newToken = signToken({ email: payload.email, locker_id: locker.locker_id, session_id: session._id.toString() });
 
     return NextResponse.json({ session_id: session._id, token: newToken, paid_until });
@@ -77,6 +80,8 @@ export async function POST(req: NextRequest) {
     );
 
     await Locker.updateOne({ _id: locker._id }, { unlock_requested: true });
+
+    publishUnlock(locker.locker_id).catch(console.error);
 
     return NextResponse.json({ session_id: session._id, paid_until: new_paid_until });
   }

@@ -1,132 +1,202 @@
 /*
- * Smart Locker — ESP8266 / ESP32 Firmware
+ * Smart Locker — ESP8266 Firmware
+ * Control method: MQTT (primary, instant) + HTTP polling (fallback every 30s)
  *
- * Hardware:
- *   - ESP8266 (NodeMCU) or ESP32
- *   - 5V relay module on RELAY_PIN (controls solenoid lock / servo)
- *   - Optional door sensor (magnetic reed switch) on DOOR_PIN
+ * Libraries — install via Arduino IDE Library Manager:
+ *   1. ESP8266WiFi       (comes with ESP8266 board package)
+ *   2. PubSubClient      by Nick O'Leary
+ *   3. ESP8266HTTPClient (comes with ESP8266 board package)
+ *   4. ArduinoJson       by Benoit Blanchon
  *
- * Libraries required (install via Arduino Library Manager):
- *   - ESP8266WiFi (built-in for ESP8266) / WiFi (built-in for ESP32)
- *   - ESP8266HTTPClient / HTTPClient
- *   - ArduinoJson
+ * Board setup:
+ *   File → Preferences → Additional Boards URL:
+ *   http://arduino.esp8266.com/stable/package_esp8266com_index.json
+ *   Then: Tools → Board → ESP8266 Boards → NodeMCU 1.0
  */
 
-#include <Arduino.h>
-
-// ---- For ESP8266 ----
 #include <ESP8266WiFi.h>
+#include <PubSubClient.h>
 #include <ESP8266HTTPClient.h>
 #include <WiFiClientSecureBearSSL.h>
-
-// ---- For ESP32 (uncomment and comment out ESP8266 lines above) ----
-// #include <WiFi.h>
-// #include <HTTPClient.h>
-// #include <WiFiClientSecure.h>
-
 #include <ArduinoJson.h>
 
 // ============================================================
-// CONFIG — change these before flashing
+// CONFIG — edit these before flashing
 // ============================================================
-const char* WIFI_SSID     = "YourWiFiSSID";
-const char* WIFI_PASS     = "YourWiFiPassword";
-const char* SERVER_URL    = "https://your-app.vercel.app";
-const char* LOCKER_ID     = "L001";          // must match DB
-const char* ESP_SECRET    = "esp_shared_secret_key";  // must match .env
+const char* WIFI_SSID      = "YOUR_WIFI_SSID";
+const char* WIFI_PASS      = "YOUR_WIFI_PASSWORD";
 
-const int   RELAY_PIN     = D1;   // GPIO5 on NodeMCU (active LOW relay)
-const int   DOOR_PIN      = D2;   // GPIO4 — reed switch (optional)
-const int   POLL_INTERVAL = 5000; // ms between unlock checks
-const int   UNLOCK_HOLD   = 5000; // ms to hold relay open
+// Your deployed Next.js URL (no trailing slash)
+const char* SERVER_URL     = "https://your-app.vercel.app";
+
+// Must match ESP_SECRET in your .env.local
+const char* ESP_SECRET     = "esp_shared_secret_key";
+
+// Must match locker_id in MongoDB and MQTT_TOPIC_PREFIX in .env.local
+const char* LOCKER_ID      = "L001";
+const char* TOPIC_PREFIX   = "smartlocker_proj"; // must match MQTT_TOPIC_PREFIX in .env
+
+// Hardware
+const int   RELAY_PIN      = D1;   // GPIO5 — connect relay IN pin here
+const int   STATUS_LED     = D4;   // GPIO2 — built-in LED (active LOW on NodeMCU)
+
+// Timing
+const long  POLL_INTERVAL  = 30000; // HTTP fallback poll every 30s (MQTT handles instant)
+const int   UNLOCK_HOLD_MS = 5000;  // relay stays open for 5 seconds
 // ============================================================
 
-unsigned long lastPoll = 0;
+// MQTT — free public HiveMQ broker, no account needed
+const char* MQTT_BROKER  = "broker.hivemq.com";
+const int   MQTT_PORT    = 1883;
 
-void setup() {
-  Serial.begin(115200);
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, HIGH); // relay off (active LOW)
+WiFiClient   wifiClient;
+PubSubClient mqttClient(wifiClient);
 
-  if (DOOR_PIN > 0) pinMode(DOOR_PIN, INPUT_PULLUP);
+unsigned long lastHttpPoll = 0;
+bool          unlockPending = false;
 
-  connectWifi();
+// ── topic helpers ─────────────────────────────────────────
+String cmdTopic() {
+  return String(TOPIC_PREFIX) + "/" + LOCKER_ID + "/unlock";
 }
 
-void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi lost — reconnecting...");
-    connectWifi();
+// ── MQTT callback ─────────────────────────────────────────
+void onMqttMessage(char* topic, byte* payload, unsigned int length) {
+  Serial.print("[MQTT] Message on: ");
+  Serial.println(topic);
+
+  // Parse JSON payload: {"cmd":"unlock","ts":...}
+  StaticJsonDocument<128> doc;
+  DeserializationError err = deserializeJson(doc, payload, length);
+  if (err) {
+    Serial.print("[MQTT] JSON error: ");
+    Serial.println(err.c_str());
     return;
   }
 
-  if (millis() - lastPoll >= POLL_INTERVAL) {
-    lastPoll = millis();
-    checkUnlock();
+  const char* cmd = doc["cmd"] | "";
+  if (strcmp(cmd, "unlock") == 0) {
+    Serial.println("[MQTT] Unlock command received!");
+    unlockPending = true;
   }
 }
 
+// ── WiFi ──────────────────────────────────────────────────
 void connectWifi() {
-  Serial.printf("Connecting to %s", WIFI_SSID);
+  if (WiFi.status() == WL_CONNECTED) return;
+  Serial.printf("\nConnecting to %s", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
     delay(500);
     Serial.print(".");
     attempts++;
   }
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\nConnected — IP: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("\nWiFi connected — IP: %s\n", WiFi.localIP().toString().c_str());
   } else {
-    Serial.println("\nFailed to connect. Retrying in 10s.");
-    delay(10000);
+    Serial.println("\nWiFi failed. Will retry.");
   }
 }
 
-void checkUnlock() {
-  // ESP8266 with HTTPS (skip cert verification for dev)
-  BearSSL::WiFiClientSecure client;
-  client.setInsecure(); // TODO: use a proper cert fingerprint in production
+// ── MQTT connect ──────────────────────────────────────────
+void connectMQTT() {
+  if (mqttClient.connected()) return;
+
+  String clientId = String("SmartLocker_") + LOCKER_ID + "_" + String(ESP.getChipId(), HEX);
+
+  Serial.printf("[MQTT] Connecting as %s ...\n", clientId.c_str());
+
+  if (mqttClient.connect(clientId.c_str())) {
+    Serial.println("[MQTT] Connected to broker.hivemq.com");
+    mqttClient.subscribe(cmdTopic().c_str(), 1); // QoS 1
+    Serial.printf("[MQTT] Subscribed to: %s\n", cmdTopic().c_str());
+  } else {
+    Serial.printf("[MQTT] Failed, rc=%d — will retry in 5s\n", mqttClient.state());
+  }
+}
+
+// ── HTTP fallback poll ────────────────────────────────────
+void httpPoll() {
+  BearSSL::WiFiClientSecure secClient;
+  secClient.setInsecure(); // OK for dev; use cert fingerprint in production
 
   HTTPClient http;
   String url = String(SERVER_URL) + "/api/locker/unlock?locker_id=" + LOCKER_ID;
 
-  if (!http.begin(client, url)) {
-    Serial.println("HTTP begin failed");
-    return;
-  }
-
+  if (!http.begin(secClient, url)) return;
   http.addHeader("x-esp-secret", ESP_SECRET);
 
   int code = http.GET();
-  if (code != 200) {
-    Serial.printf("Poll failed — HTTP %d\n", code);
-    http.end();
-    return;
+  if (code == 200) {
+    StaticJsonDocument<128> doc;
+    deserializeJson(doc, http.getString());
+    if (doc["unlock"] | false) {
+      Serial.println("[HTTP] Unlock flag set — triggering");
+      unlockPending = true;
+    }
+  } else {
+    Serial.printf("[HTTP] Poll failed: %d\n", code);
   }
-
-  String body = http.getString();
   http.end();
-
-  StaticJsonDocument<128> doc;
-  DeserializationError err = deserializeJson(doc, body);
-  if (err) {
-    Serial.printf("JSON parse error: %s\n", err.c_str());
-    return;
-  }
-
-  bool unlock = doc["unlock"] | false;
-  Serial.printf("Poll → unlock: %s\n", unlock ? "YES" : "no");
-
-  if (unlock) {
-    triggerUnlock();
-  }
 }
 
+// ── Relay trigger ─────────────────────────────────────────
 void triggerUnlock() {
-  Serial.println(">>> UNLOCKING <<<");
-  digitalWrite(RELAY_PIN, LOW);   // energise relay — lock opens
-  delay(UNLOCK_HOLD);
-  digitalWrite(RELAY_PIN, HIGH);  // de-energise relay — lock closes
-  Serial.println(">>> LOCKED <<<");
+  Serial.println(">>> UNLOCKING LOCKER <<<");
+
+  // Flash status LED while unlocked
+  digitalWrite(STATUS_LED, LOW);    // LED on (active LOW)
+  digitalWrite(RELAY_PIN, LOW);     // Energise relay (active LOW) — lock opens
+
+  delay(UNLOCK_HOLD_MS);
+
+  digitalWrite(RELAY_PIN, HIGH);    // De-energise — lock closes
+  digitalWrite(STATUS_LED, HIGH);   // LED off
+
+  Serial.println(">>> LOCKER CLOSED <<<");
+}
+
+// ── Setup ─────────────────────────────────────────────────
+void setup() {
+  Serial.begin(115200);
+  delay(100);
+
+  pinMode(RELAY_PIN, OUTPUT);
+  pinMode(STATUS_LED, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH);  // relay off
+  digitalWrite(STATUS_LED, HIGH); // LED off
+
+  connectWifi();
+
+  mqttClient.setServer(MQTT_BROKER, MQTT_PORT);
+  mqttClient.setCallback(onMqttMessage);
+  connectMQTT();
+}
+
+// ── Loop ──────────────────────────────────────────────────
+void loop() {
+  // Keep WiFi alive
+  if (WiFi.status() != WL_CONNECTED) {
+    connectWifi();
+    return;
+  }
+
+  // Keep MQTT alive — reconnects automatically if dropped
+  if (!mqttClient.connected()) {
+    connectMQTT();
+  }
+  mqttClient.loop(); // process incoming messages
+
+  // HTTP fallback poll every 30s (catches anything MQTT missed)
+  if (millis() - lastHttpPoll >= POLL_INTERVAL) {
+    lastHttpPoll = millis();
+    httpPoll();
+  }
+
+  // Execute unlock if flagged (from MQTT or HTTP)
+  if (unlockPending) {
+    unlockPending = false;
+    triggerUnlock();
+  }
 }

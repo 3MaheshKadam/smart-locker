@@ -1,11 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { AlertTriangle, CheckCircle, Unlock } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { AlertTriangle, CheckCircle, Unlock, Mail, ArrowLeft, Clock } from 'lucide-react';
+import OtpInput from '@/components/OtpInput';
+import OvertimeCounter from '@/components/OvertimeCounter';
 import PriceSummary from '@/components/PriceSummary';
 import RazorpayButton from '@/components/RazorpayButton';
-import { formatINR } from '@/lib/utils';
+import CountdownTimer from '@/components/CountdownTimer';
+import { cn, formatINR } from '@/lib/utils';
+
+interface LockerStatus {
+  label: string;
+  location: string;
+  hourly_rate: number;
+  status: string;
+  session_info: { paid_until: string } | null;
+}
 
 interface SessionData {
   session_id: string;
@@ -18,58 +29,149 @@ interface SessionData {
   overtime_amount_paise: number;
 }
 
-interface LockerInfo {
-  label: string;
-  hourly_rate: number;
-}
-
-type Stage = 'loading' | 'summary' | 'overtime' | 'unlocking' | 'done' | 'error';
+type Stage =
+  | 'loading'          // fetching locker status
+  | 'status'           // show time info — no auth yet
+  | 'otp-request'      // enter email
+  | 'otp-verify'       // enter OTP
+  | 'summary'          // verified + on time → unlock button
+  | 'overtime'         // verified + overtime → payment
+  | 'unlocking'
+  | 'done'
+  | 'error';
 
 export default function ReturnPage() {
   const params = useParams<{ locker_id: string }>();
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const session_id = searchParams.get('session_id');
 
   const [stage, setStage] = useState<Stage>('loading');
+  const [lockerStatus, setLockerStatus] = useState<LockerStatus | null>(null);
+  const [isOvertime, setIsOvertime] = useState(false);
+
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [token, setToken] = useState('');
+  const [name, setName] = useState('');
+  const [cooldown, setCooldown] = useState(0);
+  const [otpLoading, setOtpLoading] = useState(false);
+
   const [session, setSession] = useState<SessionData | null>(null);
-  const [locker, setLocker] = useState<LockerInfo | null>(null);
+  const [sessionId, setSessionId] = useState('');
   const [orderId, setOrderId] = useState('');
   const [error, setError] = useState('');
-  const [token, setToken] = useState('');
-  const [email, setEmail] = useState('');
-  const [name, setName] = useState('');
+  const [actionLoading, setActionLoading] = useState(false);
 
+  // Step 1: fetch locker status (public, no auth)
   useEffect(() => {
-    const t = localStorage.getItem('sl_token');
-    const e = localStorage.getItem('sl_email') || '';
-    const n = localStorage.getItem('sl_name') || '';
-    if (!t) { router.replace(`/locker/${params.locker_id}/register?action=return`); return; }
-    setToken(t);
-    setEmail(e);
-    setName(n);
+    const storedEmail = localStorage.getItem('sl_email') || '';
+    const storedName = localStorage.getItem('sl_name') || '';
+    const storedToken = localStorage.getItem('sl_token') || '';
+    setEmail(storedEmail);
+    setName(storedName);
+    setToken(storedToken);
 
-    Promise.all([
-      fetch(`/api/session/${session_id}`, { headers: { Authorization: `Bearer ${t}` } }).then((r) => r.json()),
-      fetch(`/api/locker/${params.locker_id}`).then((r) => r.json()),
-    ]).then(([sess, lock]) => {
-      setSession(sess);
-      setLocker(lock);
-      setStage(sess.overtime_hours > 0 && !sess.in_grace_period ? 'overtime' : 'summary');
+    fetch(`/api/locker/${params.locker_id}`)
+      .then((r) => r.json())
+      .then((data: LockerStatus) => {
+        setLockerStatus(data);
+        if (data.status !== 'occupied' || !data.session_info) {
+          setError('No active session found on this locker.');
+          setStage('error');
+          return;
+        }
+        const overtime = new Date(data.session_info.paid_until).getTime() < Date.now();
+        setIsOvertime(overtime);
+        setStage('status');
+      });
+  }, [params.locker_id]);
+
+  // Cooldown timer
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  // Update overtime flag live (in case user is on status screen when time expires)
+  useEffect(() => {
+    if (stage !== 'status' || !lockerStatus?.session_info) return;
+    const id = setInterval(() => {
+      const ot = new Date(lockerStatus.session_info!.paid_until).getTime() < Date.now();
+      setIsOvertime(ot);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [stage, lockerStatus]);
+
+  // ── OTP ──────────────────────────────────────────────────
+  async function sendOTP() {
+    if (!email) { setError('Please enter your email'); return; }
+    setError('');
+    setOtpLoading(true);
+    const res = await fetch('/api/auth/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, locker_id: params.locker_id }),
     });
-  }, [session_id, params.locker_id, router]);
+    const data = await res.json();
+    setOtpLoading(false);
+    if (!res.ok) { setError(data.error); return; }
+    setStage('otp-verify');
+    setCooldown(60);
+  }
 
+  async function verifyOTP() {
+    if (otp.length < 6) { setError('Enter the 6-digit OTP'); return; }
+    setError('');
+    setOtpLoading(true);
+    const res = await fetch('/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp, locker_id: params.locker_id, name }),
+    });
+    const data = await res.json();
+    setOtpLoading(false);
+
+    if (!res.ok) { setError(data.error); return; }
+
+    localStorage.setItem('sl_token', data.token);
+    setToken(data.token);
+
+    if (!data.active_session) {
+      setError('No active session found for this email on this locker.');
+      return;
+    }
+
+    const sid = data.active_session.session_id;
+    setSessionId(sid);
+
+    const sessRes = await fetch(`/api/session/${sid}`, {
+      headers: { Authorization: `Bearer ${data.token}` },
+    });
+    const sessData: SessionData = await sessRes.json();
+    setSession(sessData);
+
+    if (sessData.overtime_hours > 0 && !sessData.in_grace_period) {
+      setStage('overtime');
+    } else {
+      setStage('summary');
+    }
+  }
+
+  // ── Unlock ────────────────────────────────────────────────
   async function handleUnlock() {
-    setStage('unlocking');
+    setActionLoading(true);
     const res = await fetch('/api/session/close', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ session_id }),
+      body: JSON.stringify({ session_id: sessionId }),
     });
     const data = await res.json();
+    setActionLoading(false);
 
     if (res.status === 402) {
-      setSession((prev) => prev ? { ...prev, overtime_hours: data.overtime_hours, overtime_amount_paise: data.overtime_amount_paise } : prev);
+      setSession((prev) =>
+        prev ? { ...prev, overtime_hours: data.overtime_hours, overtime_amount_paise: data.overtime_amount_paise } : prev
+      );
       setStage('overtime');
       return;
     }
@@ -77,33 +179,57 @@ export default function ReturnPage() {
     setStage('done');
   }
 
+  // ── Overtime payment ──────────────────────────────────────
   async function createOvertimeOrder() {
     setError('');
+    setActionLoading(true);
     const res = await fetch('/api/payment/create-order', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ locker_id: params.locker_id, type: 'overtime', session_id }),
+      body: JSON.stringify({ locker_id: params.locker_id, type: 'overtime', session_id: sessionId }),
     });
     const data = await res.json();
+    setActionLoading(false);
     if (!res.ok) { setError(data.error); return; }
     setOrderId(data.order_id);
   }
 
-  async function handleOvertimePaymentSuccess(paymentData: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) {
+  async function handleMockOvertimePayment() {
+    setError('');
+    setActionLoading(true);
+    const res = await fetch('/api/payment/mock-overtime', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ session_id: sessionId, locker_id: params.locker_id }),
+    });
+    const data = await res.json();
+    setActionLoading(false);
+    if (!res.ok) { setError(data.error); return; }
+    await handleUnlock();
+  }
+
+  async function handleOvertimePaymentSuccess(paymentData: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) {
     const res = await fetch('/api/payment/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ ...paymentData, name }),
     });
     if (!res.ok) { setError('Payment verification failed'); return; }
-    // Now close session
     await handleUnlock();
   }
+
+  // ══════════════════════════════════════════════════════════
+  // Renders
+  // ══════════════════════════════════════════════════════════
 
   if (stage === 'loading') {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-400 animate-pulse">Loading session...</div>
+        <div className="text-gray-400 animate-pulse">Checking locker status...</div>
       </main>
     );
   }
@@ -111,14 +237,14 @@ export default function ReturnPage() {
   if (stage === 'done') {
     return (
       <main className="min-h-screen bg-gradient-to-br from-green-50 to-white flex items-center justify-center p-4">
-        <div className="w-full max-w-sm text-center space-y-4">
+        <div className="w-full max-w-sm text-center space-y-5">
           <div className="flex justify-center">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
               <CheckCircle className="w-10 h-10 text-green-600" />
             </div>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Locker Unlocked!</h1>
-          <p className="text-gray-500">Please collect your belongings. Thank you for using Smart Locker.</p>
+          <p className="text-gray-500 text-sm">Please collect your belongings. Thank you!</p>
           <button
             onClick={() => router.push(`/locker/${params.locker_id}`)}
             className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl"
@@ -130,36 +256,236 @@ export default function ReturnPage() {
     );
   }
 
+  if (stage === 'error') {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <p className="text-red-500">{error || 'Something went wrong.'}</p>
+          <button onClick={() => router.push(`/locker/${params.locker_id}`)} className="text-indigo-600 underline text-sm">
+            Go back
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-indigo-50 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
 
-        {stage === 'overtime' && session && locker && (
+        {/* Back button */}
+        <button
+          onClick={() => {
+            if (stage === 'otp-verify') { setStage('otp-request'); setOtp(''); setError(''); }
+            else if (stage === 'otp-request') { setStage('status'); setError(''); }
+            else router.back();
+          }}
+          className="flex items-center gap-2 text-gray-500 hover:text-gray-700 text-sm"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back
+        </button>
+
+        {/* ── STAGE: status — show time info before any auth ── */}
+        {stage === 'status' && lockerStatus?.session_info && (
           <>
-            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-semibold text-red-700">Overtime Detected</p>
-                <p className="text-red-600 text-sm mt-1">
-                  Your paid time expired {session.overtime_hours} hour{session.overtime_hours !== 1 ? 's' : ''} ago.
-                  Please pay the overtime fee to unlock.
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold text-gray-900">{lockerStatus.label}</h1>
+              <p className="text-gray-500 text-sm">{lockerStatus.location}</p>
+            </div>
+
+            {/* On time */}
+            {!isOvertime && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+                <div className="flex items-center gap-2 text-green-600 font-semibold">
+                  <Clock className="w-4 h-4" />
+                  Time remaining
+                </div>
+                <div className="text-center">
+                  <CountdownTimer
+                    paidUntil={lockerStatus.session_info.paid_until}
+                    onExpired={() => setIsOvertime(true)}
+                  />
+                </div>
+                <p className="text-xs text-center text-gray-400">
+                  Paid until{' '}
+                  {new Date(lockerStatus.session_info.paid_until).toLocaleTimeString('en-IN', {
+                    hour: '2-digit', minute: '2-digit',
+                  })}
                 </p>
+              </div>
+            )}
+
+            {/* Overtime */}
+            {isOvertime && (
+              <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-6 space-y-4">
+                <div className="flex items-center gap-2 text-red-600 font-semibold">
+                  <AlertTriangle className="w-4 h-4" />
+                  Paid time exceeded
+                </div>
+                <OvertimeCounter
+                  paidUntil={lockerStatus.session_info.paid_until}
+                  hourlyRate={lockerStatus.hourly_rate}
+                />
+              </div>
+            )}
+
+            <button
+              onClick={() => setStage('otp-request')}
+              className={cn(
+                'w-full py-4 font-bold rounded-xl transition-all text-white',
+                isOvertime
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-indigo-600 hover:bg-indigo-700'
+              )}
+            >
+              {isOvertime ? 'Verify to Pay & Unlock' : 'Verify to Unlock'}
+            </button>
+          </>
+        )}
+
+        {/* ── STAGE: otp-request ── */}
+        {stage === 'otp-request' && (
+          <>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold text-gray-900">Verify Identity</h1>
+              <p className="text-gray-500 text-sm">Enter the email you used when booking.</p>
+            </div>
+            <div className="space-y-4">
+              <div className="relative">
+                <Mail className="absolute left-3 top-3.5 w-4 h-4 text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 outline-none text-gray-900"
+                />
+              </div>
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+              <button
+                onClick={sendOTP}
+                disabled={otpLoading || !email}
+                className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl disabled:opacity-60"
+              >
+                {otpLoading ? 'Sending OTP...' : 'Send OTP'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── STAGE: otp-verify ── */}
+        {stage === 'otp-verify' && (
+          <>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold text-gray-900">Enter OTP</h1>
+              <p className="text-gray-500 text-sm">Code sent to <strong>{email}</strong></p>
+            </div>
+            <OtpInput value={otp} onChange={setOtp} disabled={otpLoading} />
+            {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+            <button
+              onClick={verifyOTP}
+              disabled={otpLoading || otp.length < 6}
+              className={cn(
+                'w-full py-4 text-white font-bold rounded-xl transition-all',
+                otp.length === 6
+                  ? 'bg-indigo-600 hover:bg-indigo-700 active:scale-95'
+                  : 'bg-gray-300 cursor-not-allowed'
+              )}
+            >
+              {otpLoading ? 'Verifying...' : 'Verify OTP'}
+            </button>
+            <button
+              onClick={sendOTP}
+              disabled={cooldown > 0 || otpLoading}
+              className="w-full text-sm text-indigo-600 disabled:text-gray-400"
+            >
+              {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend OTP'}
+            </button>
+          </>
+        )}
+
+        {/* ── STAGE: summary — on time, show unlock ── */}
+        {stage === 'summary' && session && lockerStatus && (
+          <>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold text-gray-900">Ready to Unlock</h1>
+              <p className="text-gray-500 text-sm">Identity verified — {session.user_name}</p>
+            </div>
+
+            {session.in_grace_period && (
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-orange-700 text-sm">
+                Within 10-minute grace period — no extra charge.
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3 text-sm">
+              <div className="flex justify-between text-gray-600">
+                <span>Started</span>
+                <span>{new Date(session.start_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Paid until</span>
+                <span>{new Date(session.paid_until).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Time remaining</span>
+                <CountdownTimer
+                  paidUntil={session.paid_until}
+                  onExpired={() => {
+                    fetch(`/api/session/${sessionId}`, { headers: { Authorization: `Bearer ${token}` } })
+                      .then((r) => r.json())
+                      .then((d: SessionData) => {
+                        setSession(d);
+                        if (d.overtime_hours > 0 && !d.in_grace_period) setStage('overtime');
+                      });
+                  }}
+                />
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-              <h2 className="font-bold text-gray-900">Overtime Charges</h2>
-              <PriceSummary hourlyRate={locker.hourly_rate} hours={session.overtime_hours} type="overtime" />
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+
+            <button
+              onClick={handleUnlock}
+              disabled={actionLoading}
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              <Unlock className="w-5 h-5" />
+              {actionLoading ? 'Unlocking...' : 'Unlock Locker'}
+            </button>
+          </>
+        )}
+
+        {/* ── STAGE: overtime — payment required ── */}
+        {stage === 'overtime' && session && lockerStatus && (
+          <>
+            <div className="space-y-1">
+              <h1 className="text-2xl font-bold text-gray-900">Pay Overtime</h1>
+              <p className="text-gray-500 text-sm">Identity verified — {session.user_name}</p>
             </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-5 space-y-4">
+              <OvertimeCounter
+                paidUntil={session.paid_until}
+                hourlyRate={lockerStatus.hourly_rate}
+              />
+            </div>
+
+            <PriceSummary
+              hourlyRate={lockerStatus.hourly_rate}
+              durationMinutes={session.overtime_hours * 60}
+              type="overtime"
+            />
 
             {error && <p className="text-red-500 text-sm">{error}</p>}
 
             {!orderId ? (
               <button
                 onClick={createOvertimeOrder}
-                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all"
+                disabled={actionLoading}
+                className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl disabled:opacity-60"
               >
-                Pay {formatINR(session.overtime_amount_paise)} Overtime Fee
+                {actionLoading ? 'Preparing...' : `Pay ${formatINR(session.overtime_amount_paise)} & Unlock`}
               </button>
             ) : (
               <RazorpayButton
@@ -173,53 +499,17 @@ export default function ReturnPage() {
                 className="bg-red-600 hover:bg-red-700"
               />
             )}
-          </>
-        )}
 
-        {stage === 'summary' && session && (
-          <>
-            <div className="space-y-1">
-              <h1 className="text-2xl font-bold text-gray-900">Ready to Unlock?</h1>
-              <p className="text-gray-500 text-sm">Session summary for {session.user_name}</p>
-            </div>
-
-            {session.in_grace_period && (
-              <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 text-orange-700 text-sm">
-                You are within the 10-minute grace period. No extra charge.
-              </div>
+            {process.env.NODE_ENV !== 'production' && (
+              <button
+                onClick={handleMockOvertimePayment}
+                disabled={actionLoading}
+                className="w-full py-3 border-2 border-dashed border-amber-400 text-amber-600 font-semibold rounded-xl text-sm hover:bg-amber-50 disabled:opacity-50"
+              >
+                {actionLoading ? 'Processing...' : `Skip Overtime Payment (Dev) — ${formatINR(session.overtime_amount_paise)}`}
+              </button>
             )}
-
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-3 text-sm">
-              <div className="flex justify-between text-gray-600">
-                <span>Started</span>
-                <span>{new Date(session.start_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Paid until</span>
-                <span>{new Date(session.paid_until).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
-              </div>
-            </div>
-
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-
-            <button
-              onClick={handleUnlock}
-              disabled={stage === ('unlocking' as Stage)}
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-            >
-              <Unlock className="w-5 h-5" />
-              {stage === ('unlocking' as Stage) ? 'Unlocking...' : 'Unlock Locker'}
-            </button>
           </>
-        )}
-
-        {stage === 'error' && (
-          <div className="text-center space-y-4">
-            <p className="text-red-500">{error || 'Something went wrong.'}</p>
-            <button onClick={() => router.push(`/locker/${params.locker_id}`)} className="text-indigo-600 underline text-sm">
-              Go back
-            </button>
-          </div>
         )}
       </div>
     </main>

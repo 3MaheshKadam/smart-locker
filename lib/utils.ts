@@ -23,6 +23,12 @@ export function calculateOvertimeHours(paidUntil: Date, now: Date = new Date()):
   return Math.ceil(diffMs / (1000 * 60 * 60));
 }
 
+export function calculateOvertimeMinutes(paidUntil: Date, now: Date = new Date()): number {
+  const diffMs = now.getTime() - paidUntil.getTime();
+  if (diffMs <= 0) return 0;
+  return Math.ceil(diffMs / (1000 * 60));
+}
+
 export function isInGracePeriod(paidUntil: Date, now: Date = new Date()): boolean {
   const GRACE_MINUTES = 10;
   const diffMs = now.getTime() - paidUntil.getTime();

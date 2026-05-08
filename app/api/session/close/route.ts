@@ -5,6 +5,7 @@ import Session from '@/models/Session';
 import Locker from '@/models/Locker';
 import { verifyToken } from '@/lib/auth';
 import { calculateOvertimeHours, isInGracePeriod } from '@/lib/utils';
+import { publishUnlock } from '@/lib/mqtt';
 
 export async function POST(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '');
@@ -47,11 +48,14 @@ export async function POST(req: NextRequest) {
     { status: 'closed', end_time: now }
   );
 
-  const locker_doc = session.locker_id as { _id: mongoose.Types.ObjectId };
+  const locker_doc = session.locker_id as { _id: mongoose.Types.ObjectId; locker_id: string };
   await Locker.updateOne(
     { _id: locker_doc._id },
     { status: 'available', current_session_id: null, unlock_requested: true }
   );
+
+  // Publish MQTT unlock — ESP receives this instantly from any network
+  publishUnlock(locker_doc.locker_id).catch(console.error);
 
   return NextResponse.json({ message: 'Session closed. Locker unlocking.' });
 }

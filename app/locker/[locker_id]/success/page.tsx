@@ -51,7 +51,7 @@ export default function SuccessPage() {
               <p className="text-gray-500 text-sm">Time remaining</p>
               <CountdownTimer
                 paidUntil={session.paid_until}
-                onExpired={() => router.push(`/locker/${params.locker_id}/return?session_id=${session_id}`)}
+                onExpired={() => router.push(`/locker/${params.locker_id}/return`)}
               />
             </div>
             <div className="text-xs text-gray-400">
@@ -62,7 +62,7 @@ export default function SuccessPage() {
         )}
 
         <Link
-          href={`/locker/${params.locker_id}/return?session_id=${session_id}`}
+          href={`/locker/${params.locker_id}/return`}
           className="block w-full py-4 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-xl transition-all"
         >
           Return & Unlock Later
