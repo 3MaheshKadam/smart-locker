@@ -6,13 +6,29 @@ import Session from '@/models/Session';
 import { signToken } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
-  const { email, otp, locker_id, name } = await req.json();
+  const { email, otp, locker_id, name, dev_bypass } = await req.json();
 
   if (!email || !otp || !locker_id) {
     return NextResponse.json({ error: 'email, otp, and locker_id are required' }, { status: 400 });
   }
 
   await connectDB();
+
+  // Dev-only bypass — skips OTP check entirely
+  if (dev_bypass && process.env.NODE_ENV !== 'production') {
+    const activeSession = await Session.findOne({
+      user_email: email,
+      status: { $in: ['active', 'overtime'] },
+    });
+    const token = signToken({ email, locker_id, session_id: activeSession?._id?.toString() });
+    return NextResponse.json({
+      token,
+      active_session: activeSession
+        ? { session_id: activeSession._id, paid_until: activeSession.paid_until, status: activeSession.status }
+        : null,
+      name: name || null,
+    });
+  }
 
   const record = await OTP.findOne({ email, locker_id, verified: false });
 

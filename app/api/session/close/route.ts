@@ -5,7 +5,6 @@ import Session from '@/models/Session';
 import Locker from '@/models/Locker';
 import { verifyToken } from '@/lib/auth';
 import { calculateOvertimeHours, isInGracePeriod } from '@/lib/utils';
-import { publishUnlock } from '@/lib/mqtt';
 
 export async function POST(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '');
@@ -19,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   await connectDB();
 
-  const session = await Session.findById(session_id).populate<{ locker_id: { _id: unknown; hourly_rate: number; locker_id: string } }>('locker_id');
+  const session = await Session.findById(session_id).populate<{ locker_id: { _id: mongoose.Types.ObjectId; hourly_rate: number; locker_id: string } | null }>('locker_id');
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   if (session.user_email !== payload.email) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -27,35 +26,28 @@ export async function POST(req: NextRequest) {
   const overtime_hours = calculateOvertimeHours(session.paid_until, now);
   const in_grace = isInGracePeriod(session.paid_until, now);
 
+  const locker_doc = session.locker_id as { _id: mongoose.Types.ObjectId; hourly_rate: number; locker_id: string } | null;
+  const hourly_rate = locker_doc?.hourly_rate ?? 2000;
+
   // Block unlock if overtime and not in grace period
   if (overtime_hours > 0 && !in_grace) {
-    const locker_doc = session.locker_id as { _id: unknown; hourly_rate: number };
-    const overtime_amount = overtime_hours * locker_doc.hourly_rate + 200;
+    const overtime_amount = overtime_hours * hourly_rate + 200;
     return NextResponse.json(
-      {
-        error: 'overtime_due',
-        overtime_hours,
-        overtime_amount_paise: overtime_amount,
-        session_id,
-      },
+      { error: 'overtime_due', overtime_hours, overtime_amount_paise: overtime_amount, session_id },
       { status: 402 }
     );
   }
 
   // All good — close session and trigger unlock
-  await Session.updateOne(
-    { _id: session._id },
-    { status: 'closed', end_time: now }
-  );
+  await Session.updateOne({ _id: session._id }, { status: 'closed', end_time: now });
 
-  const locker_doc = session.locker_id as { _id: mongoose.Types.ObjectId; locker_id: string };
-  await Locker.updateOne(
-    { _id: locker_doc._id },
-    { status: 'available', current_session_id: null, unlock_requested: true }
-  );
-
-  // Publish MQTT unlock — ESP receives this instantly from any network
-  publishUnlock(locker_doc.locker_id).catch(console.error);
+  if (locker_doc?._id) {
+    await Locker.updateOne(
+      { _id: locker_doc._id },
+      { status: 'available', current_session_id: null, unlock_requested: true }
+    );
+    // UNLOCK is sent by the browser (mqtt-browser.ts singleton) immediately when user taps Unlock
+  }
 
   return NextResponse.json({ message: 'Session closed. Locker unlocking.' });
 }

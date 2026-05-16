@@ -15,14 +15,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ sess
   await connectDB();
   const { session_id } = await params;
 
-  const session = await Session.findById(session_id).populate<{ locker_id: { hourly_rate: number } }>('locker_id');
+  const session = await Session.findById(session_id).populate<{ locker_id: { hourly_rate: number } | null }>('locker_id');
   if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
   if (session.user_email !== payload.email) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const now = new Date();
   const overtime_hours = calculateOvertimeHours(session.paid_until, now);
   const in_grace = isInGracePeriod(session.paid_until, now);
-  const hourly_rate = (session.locker_id as { hourly_rate: number }).hourly_rate;
+  const locker = session.locker_id as { hourly_rate: number } | null;
+  const hourly_rate = locker?.hourly_rate ?? 2000;
   const overtime_amount = overtime_hours > 0 && !in_grace ? overtime_hours * hourly_rate + 200 : 0;
 
   return NextResponse.json({

@@ -75,6 +75,32 @@ export default function RegisterPage() {
     }
   }
 
+  async function devSkipOtp() {
+    if (!name.trim() || !email.trim()) { setError('Enter name and email first'); return; }
+    setError('');
+    setLoading(true);
+    const res = await fetch('/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, otp: '000000', locker_id: params.locker_id, name, dev_bypass: true }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (!res.ok) { setError(data.error); return; }
+
+    localStorage.setItem('sl_token', data.token);
+    localStorage.setItem('sl_email', email);
+    localStorage.setItem('sl_name', name);
+
+    if (action === 'return' && data.active_session) {
+      router.push(`/locker/${params.locker_id}/return?session_id=${data.active_session.session_id}`);
+    } else if (action === 'return' && !data.active_session) {
+      setError('No active session found for this email on this locker.');
+    } else {
+      router.push(`/locker/${params.locker_id}/book`);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-indigo-50 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
@@ -132,6 +158,16 @@ export default function RegisterPage() {
             >
               {loading ? 'Sending OTP...' : 'Send OTP'}
             </button>
+            {process.env.NODE_ENV !== 'production' && (
+              <button
+                type="button"
+                onClick={devSkipOtp}
+                disabled={loading}
+                className="w-full py-3 border-2 border-dashed border-amber-400 text-amber-600 font-semibold rounded-xl text-sm hover:bg-amber-50 disabled:opacity-50"
+              >
+                Skip OTP (Dev)
+              </button>
+            )}
           </form>
         ) : (
           <div className="space-y-6">
@@ -159,6 +195,16 @@ export default function RegisterPage() {
             >
               {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend OTP'}
             </button>
+
+            {process.env.NODE_ENV !== 'production' && (
+              <button
+                onClick={devSkipOtp}
+                disabled={loading}
+                className="w-full py-3 border-2 border-dashed border-amber-400 text-amber-600 font-semibold rounded-xl text-sm hover:bg-amber-50 disabled:opacity-50"
+              >
+                Skip OTP (Dev)
+              </button>
+            )}
           </div>
         )}
       </div>

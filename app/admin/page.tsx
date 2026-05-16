@@ -26,6 +26,7 @@ interface LockerForm {
   label: string;
   location: string;
   hourly_rate: string;
+  status: string;
 }
 
 const emptyForm: LockerForm = { locker_id: '', label: '', location: '', hourly_rate: '2000' };

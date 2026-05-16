@@ -106,6 +106,28 @@ export default function ReturnPage() {
     return () => clearInterval(id);
   }, [stage, lockerStatus]);
 
+  // ── Dev bypass — skip OTP ────────────────────────────────
+  async function skipOtp() {
+    const storedToken = localStorage.getItem('sl_token') || '';
+    if (!storedToken) { setError('No token in localStorage — book a session first'); return; }
+
+    try {
+      const payload = JSON.parse(atob(storedToken.split('.')[1]));
+      const sid = payload.session_id;
+      if (!sid) { setError('Token has no session_id — book a fresh session'); return; }
+
+      setSessionId(sid);
+      const res = await fetch(`/api/session/${sid}`, { headers: { Authorization: `Bearer ${storedToken}` } });
+      if (!res.ok) { setError('Session fetch failed'); return; }
+      const sessData: SessionData = await res.json();
+      setSession(sessData);
+      setToken(storedToken);
+      setStage(sessData.overtime_hours > 0 && !sessData.in_grace_period ? 'overtime' : 'summary');
+    } catch {
+      setError('Could not decode token');
+    }
+  }
+
   // ── OTP ──────────────────────────────────────────────────
   async function sendOTP() {
     if (!email) { setError('Please enter your email'); return; }
@@ -350,6 +372,15 @@ export default function ReturnPage() {
             >
               {isOvertime ? 'Verify to Pay & Unlock' : 'Verify to Unlock'}
             </button>
+
+            {process.env.NODE_ENV !== 'production' && (
+              <button
+                onClick={skipOtp}
+                className="w-full py-3 border-2 border-dashed border-amber-400 text-amber-600 font-semibold rounded-xl text-sm hover:bg-amber-50"
+              >
+                Skip OTP (Dev)
+              </button>
+            )}
           </>
         )}
 

@@ -4,7 +4,6 @@ import Locker from '@/models/Locker';
 import Payment from '@/models/Payment';
 import Session from '@/models/Session';
 import { verifyToken, signToken } from '@/lib/auth';
-import { publishUnlock } from '@/lib/mqtt';
 
 // Only available in development — blocked in production
 export async function POST(req: NextRequest) {
@@ -70,8 +69,7 @@ export async function POST(req: NextRequest) {
     { status: 'occupied', current_session_id: session._id, unlock_requested: true }
   );
 
-  publishUnlock(locker_id).catch(console.error);
-
+  // UNLOCK is sent by the browser singleton (mqtt-browser.ts) on success page load
   const newToken = signToken({
     email: payload.email,
     locker_id,

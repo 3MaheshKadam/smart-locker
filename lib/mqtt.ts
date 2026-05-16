@@ -1,8 +1,6 @@
 import mqtt from 'mqtt';
 
-// WebSocket — same protocol as index.html and the browser hook.
-// Port 1883 (TCP) is often blocked by firewalls; 8884 (WSS) almost always gets through.
-const BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt';
+const BROKER_URL = process.env.MQTT_BROKER_URL || 'wss://broker.hivemq.com:8884/mqtt';
 
 let client: mqtt.MqttClient | null = null;
 
@@ -19,7 +17,7 @@ function getConnectedClient(): Promise<mqtt.MqttClient> {
       client = mqtt.connect(BROKER_URL, {
         clientId: `nextjs_server_${Math.random().toString(16).slice(2, 8)}`,
         clean: true,
-        connectTimeout: 4000,
+        connectTimeout: 10000,
         reconnectPeriod: 0, // don't auto-reconnect on server — create fresh client next call
       });
       client.on('error', (err) => console.error('[MQTT] error:', err.message));
@@ -32,7 +30,7 @@ function getConnectedClient(): Promise<mqtt.MqttClient> {
     } else {
       const timeout = setTimeout(() => {
         reject(new Error('[MQTT] connection timeout'));
-      }, 5000);
+      }, 12000);
 
       client.once('connect', () => {
         clearTimeout(timeout);
