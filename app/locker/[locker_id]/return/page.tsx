@@ -8,6 +8,8 @@ import OvertimeCounter from '@/components/OvertimeCounter';
 import PriceSummary from '@/components/PriceSummary';
 import RazorpayButton from '@/components/RazorpayButton';
 import CountdownTimer from '@/components/CountdownTimer';
+import MqttStatus from '@/components/MqttStatus';
+import { useMqtt } from '@/hooks/useMqtt';
 import { cn, formatINR } from '@/lib/utils';
 
 interface LockerStatus {
@@ -60,6 +62,8 @@ export default function ReturnPage() {
   const [orderId, setOrderId] = useState('');
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+
+  const { sendCommand } = useMqtt(params.locker_id);
 
   // Step 1: fetch locker status (public, no auth)
   useEffect(() => {
@@ -176,6 +180,9 @@ export default function ReturnPage() {
       return;
     }
     if (!res.ok) { setError(data.error); setStage('error'); return; }
+
+    // Publish UNLOCK directly from browser via WebSocket (same as index.html)
+    sendCommand('UNLOCK');
     setStage('done');
   }
 
@@ -245,6 +252,9 @@ export default function ReturnPage() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Locker Unlocked!</h1>
           <p className="text-gray-500 text-sm">Please collect your belongings. Thank you!</p>
+          <div className="flex justify-center">
+            <MqttStatus lockerId={params.locker_id} />
+          </div>
           <button
             onClick={() => router.push(`/locker/${params.locker_id}`)}
             className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl"
@@ -442,6 +452,8 @@ export default function ReturnPage() {
                 />
               </div>
             </div>
+
+            <MqttStatus lockerId={params.locker_id} />
 
             {error && <p className="text-red-500 text-sm">{error}</p>}
 

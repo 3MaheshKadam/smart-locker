@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircle, MapPin } from 'lucide-react';
 import CountdownTimer from '@/components/CountdownTimer';
+import MqttStatus from '@/components/MqttStatus';
+import { useMqtt } from '@/hooks/useMqtt';
 import Link from 'next/link';
 
 interface SessionInfo {
@@ -19,6 +21,14 @@ export default function SuccessPage() {
   const session_id = searchParams.get('session_id');
 
   const [session, setSession] = useState<SessionInfo | null>(null);
+  const { status, sendCommand } = useMqtt(params.locker_id);
+
+  // Send UNLOCK directly from browser via WebSocket as soon as broker connects
+  useEffect(() => {
+    if (status === 'connected') {
+      sendCommand('UNLOCK');
+    }
+  }, [status]);
 
   useEffect(() => {
     if (!session_id) return;
@@ -43,6 +53,10 @@ export default function SuccessPage() {
         <div className="space-y-1">
           <h1 className="text-2xl font-bold text-gray-900">Locker Opening!</h1>
           <p className="text-gray-500 text-sm">Payment confirmed. Please place your belongings and close the door.</p>
+        </div>
+
+        <div className="flex justify-center">
+          <MqttStatus lockerId={params.locker_id} />
         </div>
 
         {session && (

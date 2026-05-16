@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   await connectDB();
 
-  const lockers = await Locker.find().populate('current_session_id');
+  const lockers = await Locker.find().populate({ path: 'current_session_id', model: Session });
   const activeCount = lockers.filter((l) => l.status === 'occupied').length;
 
   const today = new Date();
@@ -26,21 +26,59 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ lockers, active_count: activeCount, today_revenue_paise: revenue });
 }
 
-// Seed endpoint — create test lockers
+// Add a new locker
 export async function POST(req: NextRequest) {
   if (!checkAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  await connectDB();
+  const { locker_id, label, location, hourly_rate } = await req.json();
 
-  const seed = [
-    { locker_id: 'L001', label: 'Locker A1', location: 'Ground Floor - Block A', hourly_rate: 2000 },
-    { locker_id: 'L002', label: 'Locker A2', location: 'Ground Floor - Block A', hourly_rate: 2000 },
-    { locker_id: 'L003', label: 'Locker B1', location: 'First Floor - Block B', hourly_rate: 2500 },
-  ];
-
-  for (const data of seed) {
-    await Locker.updateOne({ locker_id: data.locker_id }, data, { upsert: true });
+  if (!locker_id || !label || !location || !hourly_rate) {
+    return NextResponse.json({ error: 'locker_id, label, location and hourly_rate are required' }, { status: 400 });
   }
 
-  return NextResponse.json({ message: 'Lockers seeded', count: seed.length });
+  await connectDB();
+
+  const existing = await Locker.findOne({ locker_id });
+  if (existing) return NextResponse.json({ error: `Locker "${locker_id}" already exists` }, { status: 409 });
+
+  const locker = await Locker.create({ locker_id, label, location, hourly_rate });
+  return NextResponse.json({ message: 'Locker created', locker }, { status: 201 });
+}
+
+// Edit a locker
+export async function PATCH(req: NextRequest) {
+  if (!checkAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { locker_id, label, location, hourly_rate, status } = await req.json();
+  if (!locker_id) return NextResponse.json({ error: 'locker_id required' }, { status: 400 });
+
+  await connectDB();
+
+  const updates: Record<string, unknown> = {};
+  if (label)       updates.label = label;
+  if (location)    updates.location = location;
+  if (hourly_rate) updates.hourly_rate = hourly_rate;
+  if (status)      updates.status = status;
+
+  const locker = await Locker.findOneAndUpdate({ locker_id }, updates, { new: true });
+  if (!locker) return NextResponse.json({ error: 'Locker not found' }, { status: 404 });
+
+  return NextResponse.json({ message: 'Locker updated', locker });
+}
+
+// Delete a locker
+export async function DELETE(req: NextRequest) {
+  if (!checkAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { locker_id } = await req.json();
+  if (!locker_id) return NextResponse.json({ error: 'locker_id required' }, { status: 400 });
+
+  await connectDB();
+
+  const locker = await Locker.findOne({ locker_id });
+  if (!locker) return NextResponse.json({ error: 'Locker not found' }, { status: 404 });
+  if (locker.status === 'occupied') return NextResponse.json({ error: 'Cannot delete an occupied locker' }, { status: 409 });
+
+  await Locker.deleteOne({ locker_id });
+  return NextResponse.json({ message: 'Locker deleted' });
 }

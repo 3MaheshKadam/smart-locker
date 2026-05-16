@@ -39,8 +39,8 @@ export default function HomePage() {
 
         <p className="text-xs text-gray-400">
           Demo:{' '}
-          <Link href="/locker/L001" className="text-indigo-500 underline">
-            Open Locker L001
+          <Link href="/locker/L01" className="text-indigo-500 underline">
+            Open Locker L01
           </Link>
         </p>
       </div>

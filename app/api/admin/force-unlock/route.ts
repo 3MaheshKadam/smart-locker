@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import Locker from '@/models/Locker';
 import Session from '@/models/Session';
+import { publishUnlock } from '@/lib/mqtt';
 
 function checkAdmin(req: NextRequest) {
   const auth = req.headers.get('authorization') || '';
@@ -31,6 +32,8 @@ export async function POST(req: NextRequest) {
     { locker_id },
     { unlock_requested: true, status: 'available', current_session_id: null }
   );
+
+  publishUnlock(locker_id).catch(console.error);
 
   return NextResponse.json({ message: 'Force unlock triggered' });
 }

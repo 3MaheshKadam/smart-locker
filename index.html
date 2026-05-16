@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Smart Locker Control</title>
+
+<style>
+
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+body{
+  font-family:Arial, sans-serif;
+  background:#f3f4f6;
+  height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+.card{
+  width:400px;
+  background:white;
+  padding:30px;
+  border-radius:18px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.1);
+}
+
+h1{
+  margin-bottom:10px;
+  color:#111827;
+}
+
+.subtitle{
+  color:#6b7280;
+  margin-bottom:20px;
+  font-size:14px;
+}
+
+.status-line{
+  margin-bottom:20px;
+  font-size:14px;
+}
+
+.connected{
+  color:green;
+  font-weight:bold;
+}
+
+.disconnected{
+  color:red;
+  font-weight:bold;
+}
+
+label{
+  display:block;
+  margin-bottom:8px;
+  font-weight:bold;
+}
+
+input{
+  width:100%;
+  padding:12px;
+  border:1px solid #ccc;
+  border-radius:10px;
+  margin-bottom:20px;
+  font-size:16px;
+}
+
+button{
+  width:100%;
+  padding:14px;
+  border:none;
+  border-radius:10px;
+  color:white;
+  font-size:16px;
+  cursor:pointer;
+  margin-bottom:12px;
+}
+
+.unlock-btn{
+  background:#16a34a;
+}
+
+.unlock-btn:hover{
+  background:#15803d;
+}
+
+.lock-btn{
+  background:#dc2626;
+}
+
+.lock-btn:hover{
+  background:#b91c1c;
+}
+
+.msg{
+  margin-top:20px;
+  padding:12px;
+  border-radius:10px;
+  display:none;
+}
+
+.success{
+  background:#dcfce7;
+  color:#166534;
+  display:block;
+}
+
+.error{
+  background:#fee2e2;
+  color:#991b1b;
+  display:block;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+<h1>Smart Locker</h1>
+
+<p class="subtitle">
+Control locker using MQTT over WebSocket
+</p>
+
+<div class="status-line">
+Broker Status:
+<span id="broker-status" class="disconnected">
+Connecting...
+</span>
+</div>
+
+<label for="lockerId">Locker ID</label>
+
+<input
+type="text"
+id="lockerId"
+value="L01"
+placeholder="Enter Locker ID"
+/>
+
+<!-- UNLOCK BUTTON -->
+<button
+class="unlock-btn"
+onclick="sendCommand('UNLOCK')">
+UNLOCK
+</button>
+
+<!-- LOCK BUTTON -->
+<button
+class="lock-btn"
+onclick="sendCommand('LOCK')">
+LOCK
+</button>
+
+<div id="msg" class="msg"></div>
+
+</div>
+
+<!-- MQTT LIBRARY -->
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+<script>
+
+// ======================================
+// MQTT CONNECTION
+// ======================================
+
+const brokerUrl =
+'wss://broker.hivemq.com:8884/mqtt';
+
+const client = mqtt.connect(brokerUrl, {
+
+  connectTimeout: 4000,
+
+  reconnectPeriod: 1000,
+
+  clientId:
+    'web_' +
+    Math.random().toString(16).substr(2, 8),
+
+  clean: true
+});
+
+// ======================================
+// UI ELEMENTS
+// ======================================
+
+const brokerStatus =
+  document.getElementById('broker-status');
+
+const msgBox =
+  document.getElementById('msg');
+
+// ======================================
+// MQTT EVENTS
+// ======================================
+
+client.on('connect', () => {
+
+  console.log("MQTT Connected");
+
+  brokerStatus.innerText = "Connected";
+
+  brokerStatus.className = "connected";
+});
+
+client.on('reconnect', () => {
+
+  brokerStatus.innerText = "Reconnecting...";
+
+  brokerStatus.className = "disconnected";
+});
+
+client.on('close', () => {
+
+  brokerStatus.innerText = "Disconnected";
+
+  brokerStatus.className = "disconnected";
+});
+
+client.on('error', (err) => {
+
+  console.error(err);
+
+  brokerStatus.innerText = "Error";
+
+  brokerStatus.className = "disconnected";
+});
+
+// ======================================
+// SHOW MESSAGE
+// ======================================
+
+function showMessage(text, type){
+
+  msgBox.innerText = text;
+
+  msgBox.className = 'msg ' + type;
+}
+
+// ======================================
+// SEND MQTT COMMAND
+// ======================================
+
+function sendCommand(command){
+
+  const lockerId =
+    document.getElementById('lockerId')
+    .value
+    .trim();
+
+  if(lockerId === ''){
+
+    showMessage(
+      'Please enter Locker ID',
+      'error'
+    );
+
+    return;
+  }
+
+  if(!client.connected){
+
+    showMessage(
+      'MQTT Broker not connected',
+      'error'
+    );
+
+    return;
+  }
+
+  // SAME TOPIC AS ESP8266
+  const topic =
+    `locker/${lockerId}/cmd`;
+
+  console.log("Publishing:", command);
+
+  client.publish(
+
+    topic,
+
+    command,
+
+    {
+      qos: 0,
+      retain: false
+    },
+
+    (err) => {
+
+      if(err){
+
+        console.error(err);
+
+        showMessage(
+          'Failed to send command',
+          'error'
+        );
+
+      } else {
+
+        showMessage(
+          `${command} command sent to ${topic}`,
+          'success'
+        );
+
+        console.log(command + " sent");
+      }
+    }
+  );
+}
+
+</script>
+
+</body>
+</html>
