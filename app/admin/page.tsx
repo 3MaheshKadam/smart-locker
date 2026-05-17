@@ -29,7 +29,7 @@ interface LockerForm {
   status: string;
 }
 
-const emptyForm: LockerForm = { locker_id: '', label: '', location: '', hourly_rate: '2000' };
+const emptyForm: LockerForm = { locker_id: '', label: '', location: '', hourly_rate: '2000', status: 'available' };
 
 export default function AdminPage() {
   const [data, setData]           = useState<DashboardData | null>(null);
