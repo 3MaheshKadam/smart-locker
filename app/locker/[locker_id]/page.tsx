@@ -2,6 +2,9 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { MapPin, Clock, Lock } from 'lucide-react';
 import LockerStatusBadge from '@/components/LockerStatusBadge';
+import { connectDB } from '@/lib/db';
+import Locker from '@/models/Locker';
+import Session from '@/models/Session';
 
 interface LockerData {
   locker_id: string;
@@ -13,10 +16,29 @@ interface LockerData {
 }
 
 async function getLocker(locker_id: string): Promise<LockerData | null> {
-  const base = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const res = await fetch(`${base}/api/locker/${locker_id}`, { cache: 'no-store' });
-  if (!res.ok) return null;
-  return res.json();
+  await connectDB();
+  const locker = await Locker.findOne({ locker_id }).lean<any>();
+  if (!locker) return null;
+
+  let session_info = null;
+  if (locker.status === 'occupied' && locker.current_session_id) {
+    const session = await Session.findById(locker.current_session_id).lean<any>();
+    if (session) {
+      session_info = {
+        paid_until: session.paid_until,
+        user_email: session.user_email,
+      };
+    }
+  }
+
+  return {
+    locker_id: locker.locker_id,
+    label: locker.label,
+    location: locker.location,
+    hourly_rate: locker.hourly_rate,
+    status: locker.status,
+    session_info,
+  };
 }
 
 export default async function LockerLandingPage({ params }: { params: Promise<{ locker_id: string }> }) {
@@ -81,7 +103,7 @@ export default async function LockerLandingPage({ params }: { params: Promise<{ 
             href={`/locker/${locker_id}/register?action=return`}
             className="block w-full py-4 bg-gray-800 hover:bg-gray-900 text-white text-center font-bold rounded-xl transition-all active:scale-95"
           >
-            Return & Unlock
+            Return &amp; Unlock
           </Link>
         )}
 
