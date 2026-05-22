@@ -60,6 +60,8 @@ export async function POST(req: NextRequest) {
   // Rs 1 for live-credential testing
   amount = 100;
 
+  console.log('[create-order] using key:', process.env.RAZORPAY_KEY_ID?.slice(0, 14));
+
   let order;
   try {
     order = await razorpay.orders.create({
