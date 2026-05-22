@@ -74,7 +74,11 @@ export default async function LockerLandingPage({ params }: { params: Promise<{ 
           </div>
           <div className="flex items-center justify-between">
             <span className="text-gray-500 text-sm">Rate</span>
-            <span className="font-semibold text-gray-900">₹{(locker.hourly_rate / 100).toFixed(0)} / hr</span>
+            {process.env.NEXT_PUBLIC_TEST_PRICE_PAISE ? (
+              <span className="font-semibold text-amber-600">₹{(Number(process.env.NEXT_PUBLIC_TEST_PRICE_PAISE) / 100).toFixed(2)} (test)</span>
+            ) : (
+              <span className="font-semibold text-gray-900">₹{(locker.hourly_rate / 100).toFixed(0)} / hr</span>
+            )}
           </div>
           {locker.status === 'occupied' && locker.session_info && (
             <div className="flex items-center justify-between">

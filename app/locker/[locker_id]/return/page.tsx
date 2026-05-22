@@ -60,6 +60,7 @@ export default function ReturnPage() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [sessionId, setSessionId] = useState('');
   const [orderId, setOrderId] = useState('');
+  const [orderAmount, setOrderAmount] = useState(0);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -221,6 +222,7 @@ export default function ReturnPage() {
     setActionLoading(false);
     if (!res.ok) { setError(data.error); return; }
     setOrderId(data.order_id);
+    setOrderAmount(data.amount);
   }
 
   async function handleMockOvertimePayment() {
@@ -533,10 +535,10 @@ export default function ReturnPage() {
             ) : (
               <RazorpayButton
                 orderId={orderId}
-                amount={session.overtime_amount_paise}
+                amount={orderAmount}
                 email={email}
                 name={name}
-                label={`Pay ${formatINR(session.overtime_amount_paise)} & Unlock`}
+                label={`Pay ${formatINR(orderAmount)} & Unlock`}
                 onSuccess={handleOvertimePaymentSuccess}
                 onFailure={() => setError('Payment failed. Please try again.')}
                 className="bg-red-600 hover:bg-red-700"

@@ -19,6 +19,7 @@ export default function BookPage() {
   const [locker, setLocker] = useState<LockerInfo | null>(null);
   const [durationMinutes, setDurationMinutes] = useState(1); // default 1 min for quick testing
   const [orderId, setOrderId] = useState('');
+  const [orderAmount, setOrderAmount] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [token, setToken] = useState('');
@@ -48,6 +49,7 @@ export default function BookPage() {
     setLoading(false);
     if (!res.ok) { setError(data.error); return; }
     setOrderId(data.order_id);
+    setOrderAmount(data.amount);
   }
 
   async function handlePaymentSuccess(paymentData: {
@@ -107,7 +109,7 @@ export default function BookPage() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
           <DurationPicker
             value={durationMinutes}
-            onChange={(m) => { setDurationMinutes(m); setOrderId(''); }}
+            onChange={(m) => { setDurationMinutes(m); setOrderId(''); setOrderAmount(0); }}
             hourlyRate={locker.hourly_rate}
           />
           <PriceSummary hourlyRate={locker.hourly_rate} durationMinutes={durationMinutes} />
@@ -126,10 +128,10 @@ export default function BookPage() {
         ) : (
           <RazorpayButton
             orderId={orderId}
-            amount={totalAmount}
+            amount={orderAmount}
             email={email}
             name={name}
-            label={`Pay ₹${(totalAmount / 100).toFixed(2)}`}
+            label={`Pay ₹${(orderAmount / 100).toFixed(2)}`}
             onSuccess={handlePaymentSuccess}
             onFailure={() => setError('Payment failed. Please try again.')}
           />

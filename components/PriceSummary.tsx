@@ -5,8 +5,22 @@ interface PriceSummaryProps {
 }
 
 const CONVENIENCE_FEE = 200; // paise
+const TEST_PRICE = process.env.NEXT_PUBLIC_TEST_PRICE_PAISE
+  ? Number(process.env.NEXT_PUBLIC_TEST_PRICE_PAISE)
+  : null;
 
 export default function PriceSummary({ hourlyRate, durationMinutes, type = 'initial' }: PriceSummaryProps) {
+  if (TEST_PRICE !== null) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm">
+        <div className="flex justify-between font-bold text-amber-800">
+          <span>{type === 'overtime' ? 'Overtime Total' : 'Total'} (test override)</span>
+          <span>₹{(TEST_PRICE / 100).toFixed(2)}</span>
+        </div>
+      </div>
+    );
+  }
+
   const base = Math.max(100, Math.round((hourlyRate / 60) * durationMinutes));
   const total = base + CONVENIENCE_FEE;
 

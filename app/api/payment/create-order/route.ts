@@ -57,6 +57,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'type must be initial or overtime' }, { status: 400 });
   }
 
+  // Rs 1 for live-credential testing
+  amount = 100;
+
   let order;
   try {
     order = await razorpay.orders.create({
@@ -65,10 +68,10 @@ export async function POST(req: NextRequest) {
       receipt: `locker_${locker_id}_${Date.now()}`,
     });
   } catch (err: unknown) {
-    const rzpErr = err as { error?: { description?: string } };
-    const msg = rzpErr?.error?.description || 'Razorpay order creation failed';
-    console.error('[Razorpay]', rzpErr);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    const rzpErr = err as { error?: { description?: string; code?: string; reason?: string } };
+    console.error('[Razorpay]', JSON.stringify(rzpErr, null, 2));
+    const msg = rzpErr?.error?.description || rzpErr?.error?.reason || 'Razorpay order creation failed';
+    return NextResponse.json({ error: msg, detail: rzpErr?.error }, { status: 502 });
   }
 
   await Payment.create({

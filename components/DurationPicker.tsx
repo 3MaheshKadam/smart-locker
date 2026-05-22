@@ -5,6 +5,9 @@ import { cn } from '@/lib/utils';
 
 const MINUTE_OPTIONS = [1, 2, 5, 10, 15, 30];
 const HOUR_OPTIONS = [1, 2, 3, 6, 12];
+const TEST_PRICE = process.env.NEXT_PUBLIC_TEST_PRICE_PAISE
+  ? Number(process.env.NEXT_PUBLIC_TEST_PRICE_PAISE)
+  : null;
 
 interface DurationPickerProps {
   value: number;       // always in minutes
@@ -128,11 +131,15 @@ export default function DurationPicker({ value, onChange, hourlyRate }: Duration
       )}
 
       {/* Rate hint */}
-      <p className="text-xs text-gray-400">
-        ₹{(hourlyRate / 100).toFixed(0)}/hr ×{' '}
-        {tab === 'minutes' ? `${value} min` : `${value / 60} hr`}
-        {' '}= ₹{(cost / 100).toFixed(2)}
-      </p>
+      {TEST_PRICE !== null ? (
+        <p className="text-xs text-amber-600">Test override: ₹{(TEST_PRICE / 100).toFixed(2)} flat charge</p>
+      ) : (
+        <p className="text-xs text-gray-400">
+          ₹{(hourlyRate / 100).toFixed(0)}/hr ×{' '}
+          {tab === 'minutes' ? `${value} min` : `${value / 60} hr`}
+          {' '}= ₹{(cost / 100).toFixed(2)}
+        </p>
+      )}
     </div>
   );
 }
