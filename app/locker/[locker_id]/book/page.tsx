@@ -156,7 +156,7 @@ export default function BookPage() {
           />
         )}
 
-        {process.env.NODE_ENV !== 'production' && (
+        {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENT === 'true') && (
           <button
             onClick={handleMockPayment}
             disabled={loading}

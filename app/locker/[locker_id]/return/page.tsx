@@ -386,7 +386,7 @@ export default function ReturnPage() {
               {isOvertime ? 'Verify to Pay & Unlock' : 'Verify to Unlock'}
             </button>
 
-            {process.env.NODE_ENV !== 'production' && (
+            {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENT === 'true') && (
               <button
                 onClick={skipOtp}
                 className="w-full py-3 border-2 border-dashed border-amber-400 text-amber-600 font-semibold rounded-xl text-sm hover:bg-amber-50"
@@ -556,7 +556,7 @@ export default function ReturnPage() {
               />
             )}
 
-            {process.env.NODE_ENV !== 'production' && (
+            {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENT === 'true') && (
               <button
                 onClick={handleMockOvertimePayment}
                 disabled={actionLoading}
