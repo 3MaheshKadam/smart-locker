@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Smart Locker System – Project Report</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13.5px; color: #1a1a1a; background: #fff; line-height: 1.7; }
+  .page { max-width: 900px; margin: 0 auto; padding: 40px 50px; }
+
+  h1 { font-size: 26px; color: #1e3a5f; border-bottom: 3px solid #1e3a5f; padding-bottom: 10px; margin-bottom: 6px; }
+  h2 { font-size: 19px; color: #1e3a5f; margin: 32px 0 10px; border-left: 5px solid #3b82f6; padding-left: 12px; }
+  h3 { font-size: 15px; color: #1e40af; margin: 20px 0 8px; }
+  h4 { font-size: 13.5px; color: #1e3a5f; margin: 14px 0 6px; }
+
+  p { margin-bottom: 10px; }
+  ul, ol { margin: 8px 0 12px 24px; }
+  li { margin-bottom: 5px; }
+
+  .subtitle { color: #555; font-size: 14px; margin-bottom: 30px; }
+  .badge { display: inline-block; background: #dbeafe; color: #1e40af; border-radius: 4px; padding: 2px 8px; font-size: 11.5px; font-weight: 600; margin: 2px; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .badge-yellow { background: #fef9c3; color: #854d0e; }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 13px; }
+  th { background: #1e3a5f; color: #fff; padding: 9px 12px; text-align: left; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+
+  pre { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; font-size: 12px; overflow-x: auto; margin: 10px 0 18px; line-height: 1.6; }
+  code { background: #f1f5f9; color: #0f172a; padding: 1px 5px; border-radius: 3px; font-size: 12.5px; font-family: 'Consolas', monospace; }
+
+  .box { border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 8px; padding: 14px 18px; margin: 14px 0; }
+  .box-green { border-color: #86efac; background: #f0fdf4; }
+  .box-yellow { border-color: #fde68a; background: #fffbeb; }
+  .box-red { border-color: #fca5a5; background: #fff1f2; }
+
+  .flow { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 24px; font-family: 'Consolas', monospace; font-size: 12.5px; line-height: 2; margin: 12px 0 20px; white-space: pre; }
+
+  .cover { text-align: center; padding: 60px 0 40px; border-bottom: 2px solid #e2e8f0; margin-bottom: 40px; }
+  .cover h1 { border: none; font-size: 32px; }
+  .cover .sub { font-size: 16px; color: #555; margin-top: 12px; }
+  .cover .meta { margin-top: 30px; font-size: 13px; color: #666; line-height: 2; }
+
+  .toc { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px 28px; margin: 20px 0 40px; }
+  .toc h2 { margin-top: 0; border: none; padding: 0; }
+  .toc ol { margin-left: 20px; }
+  .toc li { padding: 3px 0; }
+  .toc a { color: #1e40af; text-decoration: none; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+
+  @media print {
+    .page { padding: 20px 30px; }
+    pre { font-size: 11px; }
+    h1 { font-size: 22px; }
+    h2 { font-size: 17px; }
+    .cover { padding: 30px 0 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <h1>🔐 Smart Locker System</h1>
+  <div class="sub">IoT-Based Automated Locker Management with Web Interface</div>
+  <div style="margin-top:20px;">
+    <span class="badge">Next.js 16</span>
+    <span class="badge">MongoDB Atlas</span>
+    <span class="badge">MQTT / HiveMQ</span>
+    <span class="badge">ESP8266</span>
+    <span class="badge">Razorpay</span>
+    <span class="badge">JWT Auth</span>
+  </div>
+  <div class="meta">
+    <strong>Project Type:</strong> Full-Stack IoT Web Application<br/>
+    <strong>Platform:</strong> Web (Mobile-First) + Embedded Hardware<br/>
+    <strong>Deployment:</strong> Vercel (Web) + MongoDB Atlas (DB) + HiveMQ (MQTT Broker)<br/>
+    <strong>Hardware:</strong> ESP8266 NodeMCU + Solenoid Lock + Power Supply
+  </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h2>📋 Table of Contents</h2>
+  <ol>
+    <li><a href="#abstract">Abstract / Project Overview</a></li>
+    <li><a href="#hardware">Hardware Components (Detail)</a></li>
+    <li><a href="#softwarestack">Software Stack</a></li>
+    <li><a href="#architecture">System Architecture</a></li>
+    <li><a href="#mqtt">MQTT – How Connection is Made (Detail)</a></li>
+    <li><a href="#auth">Authentication Flow (OTP + JWT)</a></li>
+    <li><a href="#payment">Payment Flow (Razorpay)</a></li>
+    <li><a href="#booking">Complete Booking & Return Flow</a></li>
+    <li><a href="#database">Database Design</a></li>
+    <li><a href="#api">API Endpoints Reference</a></li>
+    <li><a href="#security">Security Measures</a></li>
+    <li><a href="#conclusion">Conclusion</a></li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="abstract">1. Abstract / Project Overview</h2>
+
+<p>The <strong>Smart Locker System</strong> is an IoT-based automated locker rental platform that allows users to <strong>book, pay for, and unlock physical lockers using a web browser on their mobile phone</strong>. The user scans a QR code placed on the locker, which opens a mobile web app. They authenticate via One-Time Password (OTP), select a rental duration, pay online using Razorpay, and the locker unlocks automatically.</p>
+
+<p>The system uses the <strong>MQTT protocol</strong> to send real-time lock/unlock commands from the web server to an <strong>ESP8266 microcontroller</strong> that controls a physical solenoid lock. An additional HTTP polling mechanism acts as a backup channel for hardware reliability.</p>
+
+<div class="box">
+  <strong>Problem Solved:</strong> Traditional lockers require physical keys or tokens. This system eliminates keys entirely — a user's mobile phone and email are sufficient to rent and access a locker from anywhere.
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="hardware">2. Hardware Components (Detail)</h2>
+
+<h3>2.1 ESP8266 NodeMCU (Main Microcontroller)</h3>
+<table>
+  <tr><th>Property</th><th>Detail</th></tr>
+  <tr><td>Full Name</td><td>ESP8266 NodeMCU Development Board v3</td></tr>
+  <tr><td>Processor</td><td>Tensilica L106 32-bit RISC processor @ 80 MHz</td></tr>
+  <tr><td>Flash Memory</td><td>4 MB</td></tr>
+  <tr><td>RAM</td><td>64 KB instruction, 96 KB data</td></tr>
+  <tr><td>WiFi</td><td>802.11 b/g/n (2.4 GHz) — Built-in</td></tr>
+  <tr><td>GPIO Pins</td><td>11 digital I/O pins (3.3V logic)</td></tr>
+  <tr><td>Operating Voltage</td><td>3.3V (5V tolerant via USB)</td></tr>
+  <tr><td>USB Interface</td><td>CP2102 USB-to-Serial chip</td></tr>
+  <tr><td>Programming</td><td>Arduino IDE / MicroPython</td></tr>
+  <tr><td>Protocol Support</td><td>HTTP, HTTPS, MQTT, WebSocket, TCP/UDP</td></tr>
+  <tr><td>Cost</td><td>~₹200–₹350</td></tr>
+</table>
+
+<div class="box-green box">
+  <strong>Why ESP8266?</strong> It has built-in WiFi, supports MQTT natively, is extremely low cost, and has a large community. It can connect to a cloud MQTT broker and subscribe to topics to receive lock/unlock commands over the internet.
+</div>
+
+<h3>2.2 Solenoid Lock (12V DC)</h3>
+<table>
+  <tr><th>Property</th><th>Detail</th></tr>
+  <tr><td>Type</td><td>Push-Pull Solenoid Electromagnetic Lock</td></tr>
+  <tr><td>Operating Voltage</td><td>12V DC</td></tr>
+  <tr><td>Current Draw</td><td>~500mA (energized) / 0mA (de-energized)</td></tr>
+  <tr><td>Mechanism</td><td>Normally Locked (energize to unlock)</td></tr>
+  <tr><td>Stroke Length</td><td>10–15 mm</td></tr>
+  <tr><td>Force</td><td>~2.5 kg pull force</td></tr>
+  <tr><td>Cost</td><td>~₹150–₹300</td></tr>
+</table>
+
+<div class="box-yellow box">
+  <strong>Note:</strong> The solenoid lock operates at 12V but ESP8266 GPIO pins output only 3.3V. A <strong>relay module</strong> is used as a switch between the 12V solenoid and the 3.3V GPIO signal.
+</div>
+
+<h3>2.3 Relay Module (5V, Single Channel)</h3>
+<table>
+  <tr><th>Property</th><th>Detail</th></tr>
+  <tr><td>Type</td><td>5V Single Channel Relay Module</td></tr>
+  <tr><td>Control Signal</td><td>3.3V / 5V compatible (from ESP8266 GPIO)</td></tr>
+  <tr><td>Load Capacity</td><td>250V AC / 10A or 30V DC / 10A</td></tr>
+  <tr><td>Trigger</td><td>Active LOW (LOW signal = relay ON)</td></tr>
+  <tr><td>LED Indicator</td><td>Yes (shows relay state)</td></tr>
+  <tr><td>Cost</td><td>~₹50–₹100</td></tr>
+</table>
+
+<p>The relay acts as an <strong>electrically controlled switch</strong>. When ESP8266 sends LOW signal to relay IN pin → relay closes → 12V flows to solenoid → lock opens.</p>
+
+<h3>2.4 Power Supply</h3>
+<table>
+  <tr><th>Component</th><th>Voltage</th><th>Purpose</th></tr>
+  <tr><td>USB 5V Adapter</td><td>5V</td><td>Powers ESP8266 via micro-USB</td></tr>
+  <tr><td>12V DC Adapter</td><td>12V / 1A+</td><td>Powers solenoid lock via relay</td></tr>
+  <tr><td>OR: Dual output SMPS</td><td>5V + 12V</td><td>Single unit for both components</td></tr>
+</table>
+
+<h3>2.5 Circuit Connection Diagram</h3>
+<div class="flow">
+┌─────────────────────────────────────────────────────────────┐
+│                    CIRCUIT DIAGRAM                          │
+│                                                             │
+│   5V USB ──────► ESP8266 NodeMCU                            │
+│                       │                                     │
+│                    GPIO D1 (Pin 5)                          │
+│                       │                                     │
+│                       ▼                                     │
+│               ┌───────────────┐                             │
+│               │  RELAY MODULE │                             │
+│               │  IN  ◄────────┘  (control signal 3.3V)     │
+│               │  VCC ◄──────────── 5V                       │
+│               │  GND ◄──────────── GND                      │
+│               │                                             │
+│               │  COM ◄──────────── 12V DC (+)               │
+│               │  NO  ──────────────────────────► Solenoid(+)│
+│               └───────────────┘                             │
+│                                                             │
+│   12V DC (-) ─────────────────────────────────► Solenoid(-)│
+│                                                             │
+│   LOCK STATE:                                               │
+│   GPIO HIGH → Relay OFF → 12V blocked  → Lock CLOSED        │
+│   GPIO LOW  → Relay ON  → 12V flows    → Lock OPEN (unlock) │
+└─────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>2.6 Complete Hardware List Summary</h3>
+<table>
+  <tr><th>#</th><th>Component</th><th>Quantity</th><th>Approx. Cost</th><th>Role</th></tr>
+  <tr><td>1</td><td>ESP8266 NodeMCU v3</td><td>1 per locker</td><td>₹250</td><td>WiFi + MQTT client + controller</td></tr>
+  <tr><td>2</td><td>Solenoid Lock 12V DC</td><td>1 per locker</td><td>₹200</td><td>Physical lock/unlock mechanism</td></tr>
+  <tr><td>3</td><td>5V Relay Module</td><td>1 per locker</td><td>₹60</td><td>Switch between ESP GPIO and solenoid</td></tr>
+  <tr><td>4</td><td>12V/1A DC Adapter</td><td>1 per locker</td><td>₹150</td><td>Power solenoid</td></tr>
+  <tr><td>5</td><td>USB 5V Adapter</td><td>1 per locker</td><td>₹80</td><td>Power ESP8266</td></tr>
+  <tr><td>6</td><td>Jumper Wires</td><td>Set</td><td>₹30</td><td>Circuit connections</td></tr>
+  <tr><td>7</td><td>QR Code Sticker</td><td>1 per locker</td><td>₹5</td><td>User entry point</td></tr>
+  <tr><td colspan="3"><strong>Total per locker</strong></td><td><strong>~₹775</strong></td><td></td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="softwarestack">3. Software Stack</h2>
+
+<table>
+  <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+  <tr><td>Frontend Framework</td><td>Next.js 16 (React 19)</td><td>Web pages + API routes (fullstack)</td></tr>
+  <tr><td>Language</td><td>TypeScript</td><td>Type-safe development</td></tr>
+  <tr><td>Styling</td><td>Tailwind CSS v4</td><td>Mobile-first UI design</td></tr>
+  <tr><td>Database</td><td>MongoDB Atlas</td><td>Cloud NoSQL database</td></tr>
+  <tr><td>ODM</td><td>Mongoose</td><td>MongoDB schema + queries</td></tr>
+  <tr><td>Authentication</td><td>JWT + bcryptjs</td><td>Token auth + OTP hashing</td></tr>
+  <tr><td>Email</td><td>Nodemailer (Gmail SMTP)</td><td>Sending OTP emails</td></tr>
+  <tr><td>Payments</td><td>Razorpay SDK</td><td>Online payment processing</td></tr>
+  <tr><td>IoT Protocol</td><td>MQTT (mqtt.js)</td><td>Real-time locker commands</td></tr>
+  <tr><td>MQTT Broker</td><td>HiveMQ (public cloud)</td><td>Message routing between app and ESP8266</td></tr>
+  <tr><td>Hardware</td><td>Arduino C++ (ESP8266)</td><td>MQTT subscribe + relay control</td></tr>
+  <tr><td>Deployment</td><td>Vercel</td><td>Web app hosting (serverless)</td></tr>
+  <tr><td>Tunnel (Dev)</td><td>ngrok</td><td>Expose localhost to mobile for testing</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="architecture">4. System Architecture</h2>
+
+<div class="flow">
+╔══════════════════════════════════════════════════════════════════╗
+║                    SYSTEM ARCHITECTURE                          ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                  ║
+║  📱 USER (Mobile Browser)                                        ║
+║       │                                                          ║
+║       │  HTTPS (QR Code Scan)                                    ║
+║       ▼                                                          ║
+║  ┌──────────────────────────┐                                    ║
+║  │   NEXT.JS APP (Vercel)   │                                    ║
+║  │  ┌────────────────────┐  │                                    ║
+║  │  │   PAGES (UI)       │  │◄──── QR Code URL                  ║
+║  │  │  / locker/[id]     │  │                                    ║
+║  │  │  / register        │  │                                    ║
+║  │  │  / book            │  │                                    ║
+║  │  │  / success         │  │                                    ║
+║  │  │  / return          │  │                                    ║
+║  │  └────────────────────┘  │                                    ║
+║  │  ┌────────────────────┐  │                                    ║
+║  │  │   API ROUTES       │  │                                    ║
+║  │  │  /api/auth/*       │  │                                    ║
+║  │  │  /api/payment/*    │  │                                    ║
+║  │  │  /api/session/*    │  │                                    ║
+║  │  │  /api/locker/*     │  │                                    ║
+║  │  │  /api/admin/*      │  │                                    ║
+║  │  └────────────────────┘  │                                    ║
+║  └──────────┬───────────────┘                                    ║
+║             │                                                    ║
+║    ┌────────┼──────────┬──────────────┐                          ║
+║    ▼        ▼          ▼              ▼                          ║
+║  ┌──────┐ ┌──────┐ ┌────────┐ ┌────────────┐                    ║
+║  │Mongo │ │Gmail │ │Razorpay│ │  HiveMQ    │                    ║
+║  │Atlas │ │SMTP  │ │Gateway │ │MQTT Broker │                    ║
+║  └──────┘ └──────┘ └────────┘ └─────┬──────┘                    ║
+║                                      │  WebSocket (wss://)      ║
+║                                      ▼                          ║
+║                               ┌──────────────┐                  ║
+║                               │  ESP8266     │                  ║
+║                               │  NodeMCU     │                  ║
+║                               │  (per locker)│                  ║
+║                               └──────┬───────┘                  ║
+║                                      │  GPIO signal             ║
+║                                      ▼                          ║
+║                               ┌──────────────┐                  ║
+║                               │  Relay Module│                  ║
+║                               └──────┬───────┘                  ║
+║                                      │  12V DC                  ║
+║                                      ▼                          ║
+║                               ┌──────────────┐                  ║
+║                               │ Solenoid Lock│                  ║
+║                               │  🔒 / 🔓     │                  ║
+║                               └──────────────┘                  ║
+╚══════════════════════════════════════════════════════════════════╝
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="mqtt">5. MQTT – How Connection is Made (Detail)</h2>
+
+<h3>5.1 What is MQTT?</h3>
+<p><strong>MQTT (Message Queuing Telemetry Transport)</strong> is a lightweight publish-subscribe messaging protocol designed for IoT devices. It works on a <strong>broker-based model</strong>:</p>
+<ul>
+  <li><strong>Publisher</strong> — sends a message to a topic (web app)</li>
+  <li><strong>Broker</strong> — receives and routes messages (HiveMQ)</li>
+  <li><strong>Subscriber</strong> — receives messages from a topic (ESP8266)</li>
+</ul>
+
+<div class="box">
+  <strong>Analogy:</strong> MQTT is like a post office. The web app (publisher) drops a letter in the "locker/L01/cmd" box. HiveMQ (post office/broker) stores and forwards it. ESP8266 (subscriber) checks that box and reads the letter.
+</div>
+
+<h3>5.2 MQTT Broker – HiveMQ</h3>
+<table>
+  <tr><th>Property</th><th>Value</th></tr>
+  <tr><td>Broker URL (Server-side)</td><td><code>wss://broker.hivemq.com:8884/mqtt</code></td></tr>
+  <tr><td>Broker URL (Browser)</td><td><code>wss://broker.hivemq.com:8884/mqtt</code></td></tr>
+  <tr><td>Protocol</td><td>WebSocket over TLS (WSS)</td></tr>
+  <tr><td>Port</td><td>8884 (secure WebSocket)</td></tr>
+  <tr><td>Authentication</td><td>None (public broker for development)</td></tr>
+  <tr><td>QoS Level Used</td><td>0 (Fire and forget)</td></tr>
+  <tr><td>Retain Flag</td><td>false (commands are one-time)</td></tr>
+</table>
+
+<h3>5.3 MQTT Topics Structure</h3>
+<table>
+  <tr><th>Topic</th><th>Publisher</th><th>Subscriber</th><th>Messages</th></tr>
+  <tr><td><code>locker/L01/cmd</code></td><td>Web App (Server or Browser)</td><td>ESP8266 (Locker L01)</td><td><code>UNLOCK</code> or <code>LOCK</code></td></tr>
+  <tr><td><code>locker/L02/cmd</code></td><td>Web App</td><td>ESP8266 (Locker L02)</td><td><code>UNLOCK</code> or <code>LOCK</code></td></tr>
+  <tr><td><code>locker/{id}/cmd</code></td><td>Web App</td><td>ESP8266 for that locker</td><td>Commands</td></tr>
+</table>
+
+<h3>5.4 Three MQTT Connections in the System</h3>
+
+<div class="two-col">
+  <div class="box">
+    <strong>① Server-Side (Node.js)</strong><br/>
+    File: <code>lib/mqtt.ts</code><br/><br/>
+    • Used by: Admin force-unlock, force-lock API<br/>
+    • Client ID: <code>nextjs_server_xxxxxx</code><br/>
+    • Reconnect: Disabled (fresh client per call)<br/>
+    • Timeout: 10 seconds
+  </div>
+  <div class="box">
+    <strong>② Browser-Side (React)</strong><br/>
+    File: <code>lib/mqtt-browser.ts</code><br/><br/>
+    • Used by: Success page, Return page<br/>
+    • Client ID: <code>web_xxxxxxxx</code><br/>
+    • Reconnect: Every 1000ms (auto-retry)<br/>
+    • Singleton: One connection per browser tab
+  </div>
+</div>
+
+<div class="box box-green">
+  <strong>③ ESP8266 (Hardware)</strong><br/>
+  File: Arduino sketch on device<br/><br/>
+  • Subscribes to: <code>locker/{locker_id}/cmd</code><br/>
+  • On message "UNLOCK" → pulls relay LOW → solenoid opens<br/>
+  • On message "LOCK" → pulls relay HIGH → solenoid closes
+</div>
+
+<h3>5.5 Server-Side MQTT Code Explanation</h3>
+<pre>
+// lib/mqtt.ts — Server-side MQTT client
+
+const BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt';
+
+// Creates a connection to HiveMQ broker
+function getConnectedClient(): Promise&lt;mqtt.MqttClient&gt; {
+  return new Promise((resolve, reject) => {
+    // Reuse existing connection if already connected
+    if (client && client.connected) { resolve(client); return; }
+
+    // Create new client with unique ID
+    client = mqtt.connect(BROKER_URL, {
+      clientId: `nextjs_server_${Math.random().toString(16).slice(2, 8)}`,
+      clean: true,          // No persistent session
+      connectTimeout: 10000, // 10 second timeout
+      reconnectPeriod: 0,   // No auto-reconnect (serverless environment)
+    });
+
+    client.on('connect', () => resolve(client));
+    client.on('error', (err) => reject(err));
+  });
+}
+
+// Publish UNLOCK command to locker
+async function publish(locker_id, command) {
+  const c = await getConnectedClient();
+  const topic = `locker/${locker_id}/cmd`; // e.g. "locker/L01/cmd"
+
+  c.publish(topic, command, { qos: 0, retain: false });
+  // QoS 0 = fire and forget (no acknowledgment required)
+  // retain: false = don't store message on broker
+}
+
+export function publishUnlock(locker_id) { return publish(locker_id, 'UNLOCK'); }
+export function publishLock(locker_id)   { return publish(locker_id, 'LOCK'); }
+</pre>
+
+<h3>5.6 Browser-Side MQTT Code Explanation</h3>
+<pre>
+// lib/mqtt-browser.ts — Browser-side singleton MQTT client
+
+// mqtt.js is loaded from CDN in layout.tsx (beforeInteractive)
+// So window.mqtt is available in the browser
+
+export function initMqtt() {
+  if (client) return; // Already connected — don't create duplicate
+
+  const mqttLib = window.mqtt; // From CDN
+
+  client = mqttLib.connect('wss://broker.hivemq.com:8884/mqtt', {
+    connectTimeout: 10000,
+    reconnectPeriod: 1000,            // Retry every 1 second if disconnected
+    clientId: 'web_' + randomHex(),   // Unique browser client ID
+    clean: true,
+  });
+
+  // Event listeners update UI state
+  client.on('connect',   () => notify('connected'));
+  client.on('reconnect', () => notify('reconnecting'));
+  client.on('close',     () => notify('disconnected'));
+  client.on('error',     () => notify('error'));
+}
+
+// Send command from browser to locker
+export function sendMqttCommand(lockerId, command) {
+  if (!client || !client.connected) return;
+
+  const topic = `locker/${lockerId}/cmd`; // e.g. "locker/L01/cmd"
+  client.publish(topic, command, { qos: 0, retain: false });
+}
+</pre>
+
+<h3>5.7 ESP8266 Arduino Code (Hardware Side)</h3>
+<pre>
+// ESP8266 Arduino Sketch — Subscribes to MQTT and controls relay
+
+#include &lt;ESP8266WiFi.h&gt;
+#include &lt;PubSubClient.h&gt;
+
+// WiFi credentials
+const char* ssid     = "YOUR_WIFI_NAME";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+// MQTT broker
+const char* mqttServer = "broker.hivemq.com";
+const int   mqttPort   = 1883; // TCP port (not WebSocket)
+
+// Locker ID (unique per device)
+const char* LOCKER_ID = "L01";
+const int   RELAY_PIN = D1; // GPIO5
+
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
+
+// ── Callback: called when message arrives on subscribed topic ──
+void onMessageReceived(char* topic, byte* payload, unsigned int length) {
+  String message = "";
+  for (int i = 0; i < length; i++) message += (char)payload[i];
+
+  Serial.println("Message: " + message);
+
+  if (message == "UNLOCK") {
+    digitalWrite(RELAY_PIN, LOW);  // LOW = Relay ON = Solenoid energized = UNLOCK
+    Serial.println("Locker UNLOCKED");
+  }
+  else if (message == "LOCK") {
+    digitalWrite(RELAY_PIN, HIGH); // HIGH = Relay OFF = Solenoid off = LOCKED
+    Serial.println("Locker LOCKED");
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH); // Start LOCKED
+
+  // Connect to WiFi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); }
+  Serial.println("WiFi connected");
+
+  // Connect to MQTT broker
+  mqttClient.setServer(mqttServer, mqttPort);
+  mqttClient.setCallback(onMessageReceived);
+}
+
+void loop() {
+  // Reconnect MQTT if disconnected
+  if (!mqttClient.connected()) {
+    String clientId = "esp8266_" + String(LOCKER_ID);
+    mqttClient.connect(clientId.c_str());
+
+    // Subscribe to this locker's command topic
+    String topic = "locker/" + String(LOCKER_ID) + "/cmd"; // "locker/L01/cmd"
+    mqttClient.subscribe(topic.c_str());
+  }
+
+  mqttClient.loop(); // Process incoming messages
+}
+</pre>
+
+<h3>5.8 MQTT + HTTP Polling Dual-Channel Architecture</h3>
+<p>The system uses <strong>two channels</strong> to ensure the locker command reaches the hardware:</p>
+
+<table>
+  <tr><th>Channel</th><th>Method</th><th>Speed</th><th>Reliability</th><th>Purpose</th></tr>
+  <tr><td>Primary</td><td>MQTT Publish/Subscribe</td><td>~100ms (real-time)</td><td>Medium (public broker)</td><td>Instant command delivery</td></tr>
+  <tr><td>Backup</td><td>HTTP Polling (ESP polls server)</td><td>~5 seconds</td><td>High (direct HTTP)</td><td>Guaranteed delivery even if MQTT fails</td></tr>
+</table>
+
+<div class="flow">
+HTTP POLLING FLOW (Backup Channel):
+
+  Every 5 seconds, ESP8266 sends:
+  GET /api/locker/unlock?locker_id=L01
+  Header: x-esp-secret: esp_shared_secret_key
+
+  Server checks MongoDB:
+  ┌─────────────────────────────────────┐
+  │  unlock_requested = true ?          │
+  │                                     │
+  │  YES → set flag = false             │
+  │        return { unlock: true }      │
+  │        update last_seen timestamp   │
+  │                                     │
+  │  NO  → return { unlock: false }     │
+  └─────────────────────────────────────┘
+
+  ESP8266:
+  { unlock: true }  → digitalWrite(RELAY_PIN, LOW)  → UNLOCK
+  { unlock: false } → do nothing
+</div>
+
+<h3>5.9 Complete MQTT Communication Flow (Step-by-Step)</h3>
+<div class="flow">
+USER clicks "Unlock" button on phone
+         │
+         ▼
+  Browser sends POST /api/session/close
+         │
+         ▼
+  Server (Next.js API):
+  1. Verify JWT token
+  2. Check no unpaid overtime
+  3. Update MongoDB:
+     - Session.status = 'closed'
+     - Session.end_time = now
+     - Locker.status = 'available'
+     - Locker.unlock_requested = true  ◄── (for HTTP polling backup)
+         │
+         │  ALSO simultaneously:
+         ▼
+  4. publishUnlock('L01')
+     → connects to HiveMQ broker
+     → publishes "UNLOCK" to topic "locker/L01/cmd"
+         │
+         ▼
+  HiveMQ Broker receives message
+  Routes to all subscribers of "locker/L01/cmd"
+         │
+         ▼
+  ESP8266 (subscribed to "locker/L01/cmd"):
+  onMessageReceived called with "UNLOCK"
+  digitalWrite(D1, LOW)
+         │
+         ▼
+  Relay module switches ON
+         │
+         ▼
+  12V DC flows to solenoid
+         │
+         ▼
+  🔓 Locker OPENS physically
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="auth">6. Authentication Flow (OTP + JWT)</h2>
+
+<div class="flow">
+Step 1: User enters Name + Email on /register page
+         │
+         ▼
+Step 2: POST /api/auth/send-otp
+        - Validate email format
+        - Check rate limits (max 3 OTPs per 10 min)
+        - Generate 6-digit OTP (random)
+        - Hash OTP using bcrypt (salt rounds = 10)
+        - Store hashed OTP in MongoDB (TTL = 5 min)
+        - Send plain OTP to email via Gmail SMTP
+         │
+         ▼
+Step 3: User receives email with OTP code
+         │
+         ▼
+Step 4: User enters OTP on screen
+         │
+         ▼
+Step 5: POST /api/auth/verify-otp
+        - Find OTP record by email + locker_id
+        - Check expiry (MongoDB TTL auto-deletes after 5 min)
+        - Check attempts (max 3 wrong → delete record)
+        - bcrypt.compare(userOTP, storedHash)
+        - If match → mark verified = true
+        - Generate JWT token (expires in 2 hours)
+        - Return JWT + any active session info
+         │
+         ▼
+Step 6: Frontend stores JWT in localStorage
+        All subsequent API calls send:
+        Authorization: Bearer &lt;jwt_token&gt;
+</div>
+
+<table>
+  <tr><th>Security Feature</th><th>Implementation</th></tr>
+  <tr><td>OTP Hashing</td><td>bcryptjs with 10 salt rounds (one-way hash)</td></tr>
+  <tr><td>OTP Expiry</td><td>5 minutes (MongoDB TTL index auto-deletes)</td></tr>
+  <tr><td>Max Attempts</td><td>3 wrong attempts → OTP record deleted</td></tr>
+  <tr><td>Rate Limiting</td><td>Max 3 OTP requests per 10 minutes per email</td></tr>
+  <tr><td>Resend Cooldown</td><td>60 seconds between resends</td></tr>
+  <tr><td>JWT Expiry</td><td>2 hours</td></tr>
+  <tr><td>JWT Payload</td><td>email + locker_id + session_id (no sensitive data)</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="payment">7. Payment Flow (Razorpay)</h2>
+
+<div class="flow">
+BOOKING PAYMENT:
+
+Step 1: User selects duration (1–720 minutes) on /book page
+Step 2: POST /api/payment/create-order
+        amount = (hourly_rate / 60) × minutes  [in paise]
+        + ₹2 convenience fee
+        → razorpay.orders.create({ amount, currency: 'INR' })
+        → returns order_id
+Step 3: Browser opens Razorpay checkout modal
+Step 4: User completes payment (UPI / Card / NetBanking)
+Step 5: Razorpay returns:
+        { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+Step 6: POST /api/payment/verify
+        → Verify: HMAC-SHA256(order_id + "|" + payment_id, KEY_SECRET)
+        → If valid: create Session in MongoDB
+        → Set Locker.unlock_requested = true
+        → MQTT publish "UNLOCK"
+        → Return new JWT + session_id
+</div>
+
+<div class="flow">
+OVERTIME PAYMENT:
+
+When user tries to return after paid_until time:
+  now > paid_until + 10 min grace period?
+    YES → calculate overtime:
+          overtime_hours = ceil((now - paid_until) / 60 minutes)
+          overtime_amount = overtime_hours × hourly_rate + ₹2 fee
+          → Show Razorpay modal for overtime charges
+          → On payment: extend session.paid_until by overtime_hours
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="booking">8. Complete Booking & Return Flow</h2>
+
+<div class="flow">
+═══════════════════════════════════════════════
+           COMPLETE USER JOURNEY
+═══════════════════════════════════════════════
+
+📱 USER SCANS QR CODE on Locker
+         │
+         ▼
+  /locker/L01 (Locker Detail Page)
+  Shows: status, rate, available/occupied
+         │
+    ┌────┴────┐
+    ▼         ▼
+ BOOK     RETURN & UNLOCK
+    │         │
+    ▼         ▼
+  /register?action=book   /register?action=return
+  ┌─────────────────────────────────────┐
+  │  Enter Name + Email                 │
+  │  → OTP sent to email                │
+  │  → Enter 6-digit OTP                │
+  │  → JWT token issued                 │
+  └─────────────────────────────────────┘
+         │
+    ┌────┴────────────────┐
+    ▼ (book)              ▼ (return)
+  /book                /return
+  Select duration       Check time remaining
+  Pay via Razorpay      ┌──────────────────┐
+  Session created       │ On time / grace  │──► Unlock for free
+  Locker = occupied     │ Overtime         │──► Pay overtime first
+  MQTT: LOCK sent       └──────────────────┘
+         │                        │
+         ▼                        ▼
+  /success             Session closed in MongoDB
+  Countdown timer      Locker = available
+  User stores item     MQTT: UNLOCK published
+                       ESP8266: opens solenoid
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="database">9. Database Design (MongoDB)</h2>
+
+<h3>Locker Collection</h3>
+<pre>
+{
+  locker_id:          "L01",              // Unique ID (used in URL + MQTT topic)
+  label:              "Locker 1",         // Display name
+  location:           "Ground Floor",     // Physical location
+  hourly_rate:        2000,               // In paise (₹20/hr)
+  status:             "available",        // available | occupied | maintenance
+  current_session_id: ObjectId | null,    // Active session reference
+  unlock_requested:   false,              // HTTP polling flag for ESP8266
+  last_seen:          Date,               // ESP8266 heartbeat timestamp
+}
+</pre>
+
+<h3>Session Collection</h3>
+<pre>
+{
+  locker_id:          ObjectId,           // Reference to Locker
+  user_name:          "John Doe",
+  user_email:         "john@example.com",
+  start_time:         Date,               // When booking started
+  paid_until:         Date,               // Booking valid until this time
+  end_time:           Date | null,        // When user returned (null if active)
+  paid_duration_hours: 2,                 // Hours purchased
+  status:             "active",           // active | expired | overtime | closed
+  initial_payment_id: ObjectId,
+  overtime_payment_id: ObjectId | null,
+}
+</pre>
+
+<h3>OTP Collection</h3>
+<pre>
+{
+  email:        "john@example.com",
+  locker_id:    "L01",
+  otp_hash:     "$2b$10$...",   // bcrypt hash of 6-digit OTP
+  expires_at:   Date,           // 5 minutes from creation (TTL index)
+  verified:     false,
+  attempts:     0,              // Max 3 wrong attempts
+  resend_count: 0,              // Max 3 resends per 10 min
+}
+</pre>
+
+<h3>Payment Collection</h3>
+<pre>
+{
+  session_id:          ObjectId | null,
+  locker_id:           "L01",
+  razorpay_order_id:   "order_xyz",
+  razorpay_payment_id: "pay_abc",
+  amount:              4200,            // In paise (₹42 = ₹40 booking + ₹2 fee)
+  type:                "initial",       // initial | overtime
+  status:              "paid",          // pending | paid | failed | refunded
+  duration_hours:      2,
+}
+</pre>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="api">10. API Endpoints Reference</h2>
+
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Auth</th><th>Purpose</th></tr>
+  <tr><td><span class="badge badge-green">POST</span></td><td>/api/auth/send-otp</td><td>None</td><td>Send OTP to email</td></tr>
+  <tr><td><span class="badge badge-green">POST</span></td><td>/api/auth/verify-otp</td><td>None</td><td>Verify OTP, get JWT</td></tr>
+  <tr><td><span class="badge">GET</span></td><td>/api/locker/[locker_id]</td><td>None</td><td>Get locker status</td></tr>
+  <tr><td><span class="badge">GET</span></td><td>/api/locker/unlock</td><td>ESP Secret</td><td>ESP8266 polling endpoint</td></tr>
+  <tr><td><span class="badge badge-green">POST</span></td><td>/api/payment/create-order</td><td>JWT</td><td>Create Razorpay order</td></tr>
+  <tr><td><span class="badge badge-green">POST</span></td><td>/api/payment/verify</td><td>JWT</td><td>Verify payment signature</td></tr>
+  <tr><td><span class="badge badge-green">POST</span></td><td>/api/payment/webhook</td><td>Razorpay HMAC</td><td>Razorpay event webhooks</td></tr>
+  <tr><td><span class="badge">GET</span></td><td>/api/session/[session_id]</td><td>JWT</td><td>Get session + overtime info</td></tr>
+  <tr><td><span class="badge badge-green">POST</span></td><td>/api/session/close</td><td>JWT</td><td>Return locker + unlock</td></tr>
+  <tr><td><span class="badge">GET</span></td><td>/api/admin/lockers</td><td>Admin Secret</td><td>List all lockers</td></tr>
+  <tr><td><span class="badge badge-green">POST</span></td><td>/api/admin/lockers</td><td>Admin Secret</td><td>Create new locker</td></tr>
+  <tr><td><span class="badge badge-yellow">PATCH</span></td><td>/api/admin/lockers</td><td>Admin Secret</td><td>Update locker config</td></tr>
+  <tr><td><span class="badge badge-red">DELETE</span></td><td>/api/admin/lockers</td><td>Admin Secret</td><td>Delete locker</td></tr>
+  <tr><td><span class="badge badge-green">POST</span></td><td>/api/admin/force-unlock</td><td>Admin Secret</td><td>Admin force-unlock</td></tr>
+  <tr><td><span class="badge badge-green">POST</span></td><td>/api/admin/force-lock</td><td>Admin Secret</td><td>Admin force-lock</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="security">11. Security Measures</h2>
+
+<table>
+  <tr><th>Threat</th><th>Protection</th></tr>
+  <tr><td>Unauthorized locker access</td><td>JWT token required for all booking/return APIs</td></tr>
+  <tr><td>OTP brute force</td><td>Max 3 attempts → OTP deleted; 60s resend cooldown</td></tr>
+  <tr><td>OTP interception</td><td>OTP stored as bcrypt hash (cannot be reversed)</td></tr>
+  <tr><td>Payment tampering</td><td>HMAC-SHA256 signature verification on every payment</td></tr>
+  <tr><td>Webhook spoofing</td><td>Razorpay webhook secret validation</td></tr>
+  <tr><td>ESP unauthorized polling</td><td>x-esp-secret header required on unlock endpoint</td></tr>
+  <tr><td>Admin panel access</td><td>ADMIN_SECRET environment variable</td></tr>
+  <tr><td>Session replay</td><td>JWT expires in 2 hours; single-use OTP</td></tr>
+  <tr><td>Double unlock</td><td>unlock_requested flag reset immediately after first read</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="conclusion">12. Conclusion</h2>
+
+<p>The Smart Locker System demonstrates a complete integration of <strong>web technology, cloud services, payment gateway, and IoT hardware</strong>. Key technical achievements:</p>
+
+<ul>
+  <li><strong>Passwordless Auth:</strong> OTP-based email verification with bcrypt hashing ensures secure identity verification without traditional passwords.</li>
+  <li><strong>Real-time IoT Control:</strong> MQTT protocol enables near-instant lock/unlock commands from any browser to physical hardware across the internet.</li>
+  <li><strong>Dual-Channel Reliability:</strong> MQTT (fast) + HTTP polling (reliable) ensure the locker command always reaches the ESP8266 hardware.</li>
+  <li><strong>Automated Billing:</strong> Razorpay integration with overtime detection handles the complete payment lifecycle including edge cases like grace periods.</li>
+  <li><strong>Serverless Architecture:</strong> Next.js API routes on Vercel provide a scalable, cost-effective backend without managing dedicated servers.</li>
+  <li><strong>Mobile-First Design:</strong> The entire user journey is optimized for mobile browsers accessed via QR code scan.</li>
+</ul>
+
+<div class="box box-green" style="margin-top:24px;">
+  <strong>Total System Cost (per locker unit):</strong> ~₹775 hardware + free-tier cloud services (Vercel, MongoDB Atlas free, HiveMQ public broker) = extremely low operational cost for a fully automated locker system.
+</div>
+
+<div style="margin-top:40px; border-top:1px solid #e2e8f0; padding-top:16px; color:#888; font-size:12px; text-align:center;">
+  Smart Locker System — Project Documentation | Generated for exam preparation
+</div>
+
+</div>
+</body>
+</html>

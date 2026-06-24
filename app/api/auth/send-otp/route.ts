@@ -55,7 +55,12 @@ export async function POST(req: NextRequest) {
     resend_count: recent ? recent.resend_count + 1 : 0,
   });
 
-  await sendOTPEmail(email, otp, locker.label);
+  try {
+    await sendOTPEmail(email, otp, locker.label);
+  } catch {
+    await OTP.deleteOne({ email, locker_id, verified: false });
+    return NextResponse.json({ error: 'Failed to send OTP email. Please try again later.' }, { status: 500 });
+  }
 
   return NextResponse.json({ message: 'OTP sent successfully' });
 }

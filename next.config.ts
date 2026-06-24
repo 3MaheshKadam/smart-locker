@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ['elusive-previous-canning.ngrok-free.dev'],
   async headers() {
     return [
       {

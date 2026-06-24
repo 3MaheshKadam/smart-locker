@@ -36,9 +36,9 @@ export default function RegisterPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, locker_id: params.locker_id }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ error: 'Server error. Please try again.' }));
     setLoading(false);
-    if (!res.ok) { setError(data.error); return; }
+    if (!res.ok) { setError(data.error ?? 'Something went wrong.'); return; }
     setStep('otp');
     setCooldown(60);
   }

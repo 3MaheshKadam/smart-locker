@@ -50,7 +50,7 @@ export default function OtpInput({ value, onChange, disabled }: OtpInputProps) {
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={handlePaste}
           className={cn(
-            'w-11 h-14 text-center text-xl font-bold rounded-xl border-2 outline-none transition-all',
+            'w-11 h-14 text-center text-xl font-bold rounded-xl border-2 outline-none transition-all text-gray-900',
             'border-gray-200 focus:border-indigo-500 bg-white',
             digits[i] ? 'border-indigo-400' : '',
             disabled && 'opacity-50 cursor-not-allowed'
