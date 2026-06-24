@@ -75,7 +75,7 @@ export default async function HomePage() {
                           ? 'bg-gray-100 text-gray-500'
                           : 'bg-red-100 text-red-600'
                       }`}>
-                        {available ? 'Free' : maintenance ? 'N/A' : 'Busy'}
+                        {available ? 'Free' : maintenance ? 'Offline' : 'Busy'}
                       </span>
                     </div>
                     <p className="text-xs text-gray-400">{locker.location}</p>
