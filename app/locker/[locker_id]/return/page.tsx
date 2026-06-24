@@ -244,13 +244,24 @@ export default function ReturnPage() {
     razorpay_payment_id: string;
     razorpay_signature: string;
   }) {
-    const res = await fetch('/api/payment/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...paymentData, name }),
-    });
-    if (!res.ok) { setError('Payment verification failed'); return; }
-    await handleUnlock();
+    try {
+      const res = await fetch('/api/payment/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...paymentData, name }),
+      });
+      if (!res.ok) {
+        let msg = 'Payment verification failed';
+        try { const d = await res.json(); msg = d.error || msg; } catch {}
+        console.error('[Payment] overtime verify failed, status:', res.status, msg);
+        setError(`${msg}. Payment ID: ${paymentData.razorpay_payment_id}`);
+        return;
+      }
+      await handleUnlock();
+    } catch (err) {
+      console.error('[Payment] handleOvertimePaymentSuccess error:', err);
+      setError(`Network error during verification. Payment ID: ${paymentData.razorpay_payment_id}`);
+    }
   }
 
   // ══════════════════════════════════════════════════════════
@@ -375,7 +386,7 @@ export default function ReturnPage() {
               {isOvertime ? 'Verify to Pay & Unlock' : 'Verify to Unlock'}
             </button>
 
-            {process.env.NODE_ENV !== 'production' && (
+            {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENT === 'true') && (
               <button
                 onClick={skipOtp}
                 className="w-full py-3 border-2 border-dashed border-amber-400 text-amber-600 font-semibold rounded-xl text-sm hover:bg-amber-50"
@@ -545,7 +556,7 @@ export default function ReturnPage() {
               />
             )}
 
-            {process.env.NODE_ENV !== 'production' && (
+            {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENT === 'true') && (
               <button
                 onClick={handleMockOvertimePayment}
                 disabled={actionLoading}

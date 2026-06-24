@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   await connectDB();
 
   // Dev-only bypass — skips OTP check entirely
-  if (dev_bypass && process.env.NODE_ENV !== 'production') {
+  if (dev_bypass && (process.env.NODE_ENV !== 'production' || process.env.ENABLE_MOCK_PAYMENT === 'true')) {
     const activeSession = await Session.findOne({
       user_email: email,
       status: { $in: ['active', 'overtime'] },

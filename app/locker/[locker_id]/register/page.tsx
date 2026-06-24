@@ -158,7 +158,7 @@ export default function RegisterPage() {
             >
               {loading ? 'Sending OTP...' : 'Send OTP'}
             </button>
-            {process.env.NODE_ENV !== 'production' && (
+            {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENT === 'true') && (
               <button
                 type="button"
                 onClick={devSkipOtp}
@@ -196,7 +196,7 @@ export default function RegisterPage() {
               {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend OTP'}
             </button>
 
-            {process.env.NODE_ENV !== 'production' && (
+            {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENT === 'true') && (
               <button
                 onClick={devSkipOtp}
                 disabled={loading}

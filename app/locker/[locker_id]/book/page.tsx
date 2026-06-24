@@ -57,15 +57,34 @@ export default function BookPage() {
     razorpay_payment_id: string;
     razorpay_signature: string;
   }) {
-    const res = await fetch('/api/payment/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...paymentData, name }),
-    });
-    const data = await res.json();
-    if (!res.ok) { setError(data.error); return; }
-    localStorage.setItem('sl_token', data.token);
-    router.push(`/locker/${params.locker_id}/success?session_id=${data.session_id}`);
+    try {
+      const res = await fetch('/api/payment/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...paymentData, name }),
+      });
+
+      let data: { error?: string; token?: string; session_id?: string };
+      try {
+        data = await res.json();
+      } catch {
+        console.error('[Payment] verify response was not JSON (status:', res.status, ')');
+        setError(`Server error (${res.status}). Payment ID: ${paymentData.razorpay_payment_id} — please contact support.`);
+        return;
+      }
+
+      if (!res.ok) {
+        console.error('[Payment] verify failed:', data);
+        setError(data.error || `Verification failed (${res.status}). Payment ID: ${paymentData.razorpay_payment_id}`);
+        return;
+      }
+
+      localStorage.setItem('sl_token', data.token!);
+      router.push(`/locker/${params.locker_id}/success?session_id=${data.session_id}`);
+    } catch (err) {
+      console.error('[Payment] handlePaymentSuccess error:', err);
+      setError(`Network error during verification. Payment ID: ${paymentData.razorpay_payment_id} — please contact support.`);
+    }
   }
 
   async function handleMockPayment() {
@@ -137,7 +156,7 @@ export default function BookPage() {
           />
         )}
 
-        {process.env.NODE_ENV !== 'production' && (
+        {(process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_ENABLE_MOCK_PAYMENT === 'true') && (
           <button
             onClick={handleMockPayment}
             disabled={loading}
